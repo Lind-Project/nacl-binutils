@@ -565,7 +565,7 @@ bfd_open_file (bfd *abfd)
 
 	     So we unlink the output file if and only if it has
 	     non-zero size.  */
-#ifndef __MSDOS__
+#if !defined __MSDOS__ && !defined __native_client__
 	  /* Don't do this for MSDOS: it doesn't care about overwriting
 	     a running binary, but if this file is already open by
 	     another BFD, we will be in deep trouble if we delete an

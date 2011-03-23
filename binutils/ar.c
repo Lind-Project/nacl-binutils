@@ -447,7 +447,9 @@ main (int argc, char **argv)
 
   show_version = 0;
 
+#ifndef __native_client__
   xatexit (remove_output);
+#endif
 
   for (i = 1; i < argc; i++)
     if (! ar_emul_parse_arg (argv[i]))
@@ -991,7 +993,11 @@ write_archive (bfd *iarch)
 
   old_name = (char *) xmalloc (strlen (bfd_get_filename (iarch)) + 1);
   strcpy (old_name, bfd_get_filename (iarch));
+#ifdef __native_client__
+  new_name = old_name;
+#else
   new_name = make_tempname (old_name);
+#endif
 
   if (new_name == NULL)
     bfd_fatal ("could not create temporary file whilst writing archive");
@@ -1036,8 +1042,10 @@ write_archive (bfd *iarch)
   /* We don't care if this fails; we might be creating the archive.  */
   bfd_close (iarch);
 
+#ifndef __native_client__
   if (smart_rename (new_name, old_name, 0) != 0)
     xexit (1);
+#endif
 }
 
 /* Return a pointer to the pointer to the entry which should be rplacd'd
