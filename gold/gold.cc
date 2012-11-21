@@ -270,6 +270,19 @@ queue_initial_tasks(const General_options& options,
 	workqueue->queue(tasks[i]);
     }
 
+  // @LOCALMOD-BCLD-BEGIN
+  if (options.undef_sym_check())
+    {
+      Task_token* next_blocker = new Task_token(true);
+      next_blocker->add_blocker();
+      workqueue->queue(new Undefined_Symbols_hook(
+                       options, input_objects, symtab, layout,
+                       &search_path, mapfile, this_blocker,
+                       next_blocker));
+      this_blocker = next_blocker;
+    }
+  // @LOCALMOD-BCLD-END
+
   if (options.has_plugins())
     {
       Task_token* next_blocker = new Task_token(true);

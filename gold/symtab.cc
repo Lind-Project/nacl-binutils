@@ -1294,14 +1294,16 @@ Symbol*
 Symbol_table::add_from_pluginobj(
     Sized_pluginobj<size, big_endian>* obj,
     const char* name,
+    size_t namelen, // @LOCALMOD-BCLD
     const char* ver,
+    bool is_default_version, // @LOCALMOD-BCLD
     elfcpp::Sym<size, big_endian>* sym)
 {
   unsigned int st_shndx = sym->get_st_shndx();
   bool is_ordinary = st_shndx < elfcpp::SHN_LORESERVE;
 
   Stringpool::Key ver_key = 0;
-  bool is_default_version = false;
+  // @LOCALMOD-BCLD (removed line)
   bool is_forced_local = false;
 
   if (ver != NULL)
@@ -1338,7 +1340,12 @@ Symbol_table::add_from_pluginobj(
     }
 
   Stringpool::Key name_key;
-  name = this->namepool_.add(name, true, &name_key);
+  // @LOCALMOD-BCLD-BEGIN
+  // Modified to use explicit name length, so that we can chop off
+  // the version suffix.
+  name = this->namepool_.add_with_length(name, namelen, true,
+                                         &name_key);
+  // @LOCALMOD-BCLD-END
 
   Sized_symbol<size>* res;
   res = this->add_from_object(obj, name, name_key, ver, ver_key,
@@ -1353,10 +1360,10 @@ Symbol_table::add_from_pluginobj(
 
 // Add all the symbols in a dynamic object to the hash table.
 
-template<int size, bool big_endian>
+template<int size, bool big_endian, class Sized_BaseType> // @LOCALMOD-BCLD
 void
 Symbol_table::add_from_dynobj(
-    Sized_dynobj<size, big_endian>* dynobj,
+    Sized_BaseType* dynobj, // @LOCALMOD-BCLD
     const unsigned char* syms,
     size_t count,
     const char* sym_names,
@@ -2753,6 +2760,38 @@ Symbol_table::sized_finalize_symbol(Symbol* unsized_sym)
   return true;
 }
 
+// @LOCALMOD-BCLD-BEGIN
+void
+Symbol_table::assert_no_undefined_symbols(
+    const std::set<std::string> &exceptions) const
+{
+  const char* const real_prefix = "__real_";
+  int undef_count = 0;
+  for (Symbol_table_type::const_iterator p = this->table_.begin();
+       p != this->table_.end();
+       ++p)
+    {
+      Symbol *sym = p->second;
+      if (sym->is_undefined() &&
+          sym->in_reg() &&
+          sym->binding() != elfcpp::STB_WEAK &&
+          exceptions.count(sym->name()) == 0 &&
+          // @TODO(pdox): If --wrap is to be a supported user-visible feature,
+          // then it should be implemented properly in the LLVM plugin.
+          // For now, since we need to use --wrap for the self-build, just
+          // ignore the undefined symbols that result from --wrap.
+          strncmp(sym->name(), real_prefix, strlen(real_prefix)) != 0)
+        {
+          gold_undefined_symbol(sym);
+          undef_count++;
+        }
+    }
+  if (undef_count > 0) {
+    gold_exit(GOLD_ERR);
+  }
+}
+// @LOCALMOD-BCLD-END
+
 // Write out the global symbols.
 
 void
@@ -3447,7 +3486,9 @@ Symbol*
 Symbol_table::add_from_pluginobj<32, false>(
     Sized_pluginobj<32, false>* obj,
     const char* name,
+    size_t namelen, // @LOCALMOD-BCLD
     const char* ver,
+    bool is_default_version, // @LOCALMOD-BCLD
     elfcpp::Sym<32, false>* sym);
 #endif
 
@@ -3457,7 +3498,9 @@ Symbol*
 Symbol_table::add_from_pluginobj<32, true>(
     Sized_pluginobj<32, true>* obj,
     const char* name,
+    size_t namelen, // @LOCALMOD-BCLD
     const char* ver,
+    bool is_default_version, // @LOCALMOD-BCLD
     elfcpp::Sym<32, true>* sym);
 #endif
 
@@ -3467,7 +3510,9 @@ Symbol*
 Symbol_table::add_from_pluginobj<64, false>(
     Sized_pluginobj<64, false>* obj,
     const char* name,
+    size_t namelen, // @LOCALMOD-BCLD
     const char* ver,
+    bool is_default_version, // @LOCALMOD-BCLD
     elfcpp::Sym<64, false>* sym);
 #endif
 
@@ -3477,14 +3522,16 @@ Symbol*
 Symbol_table::add_from_pluginobj<64, true>(
     Sized_pluginobj<64, true>* obj,
     const char* name,
+    size_t namelen, // @LOCALMOD-BCLD
     const char* ver,
+    bool is_default_version, // @LOCALMOD-BCLD
     elfcpp::Sym<64, true>* sym);
 #endif
 
 #ifdef HAVE_TARGET_32_LITTLE
 template
 void
-Symbol_table::add_from_dynobj<32, false>(
+Symbol_table::add_from_dynobj<32, false, Sized_dynobj<32, false> >( // @LOCALMOD-BCLD
     Sized_dynobj<32, false>* dynobj,
     const unsigned char* syms,
     size_t count,
@@ -3495,12 +3542,27 @@ Symbol_table::add_from_dynobj<32, false>(
     const std::vector<const char*>* version_map,
     Sized_relobj_file<32, false>::Symbols* sympointers,
     size_t* defined);
+// @LOCALMOD-BCLD-BEGIN
+template
+void
+Symbol_table::add_from_dynobj<32, false, Sized_pluginobj<32, false> >(
+    Sized_pluginobj<32, false>* dynobj,
+    const unsigned char* syms,
+    size_t count,
+    const char* sym_names,
+    size_t sym_name_size,
+    const unsigned char* versym,
+    size_t versym_size,
+    const std::vector<const char*>* version_map,
+    Sized_relobj_file<32, false>::Symbols* sympointers,
+    size_t* defined);
+// @LOCALMOD-BCLD-END
 #endif
 
 #ifdef HAVE_TARGET_32_BIG
 template
 void
-Symbol_table::add_from_dynobj<32, true>(
+Symbol_table::add_from_dynobj<32, true, Sized_dynobj<32, true> >( // @LOCALMOD-BCLD
     Sized_dynobj<32, true>* dynobj,
     const unsigned char* syms,
     size_t count,
@@ -3511,12 +3573,27 @@ Symbol_table::add_from_dynobj<32, true>(
     const std::vector<const char*>* version_map,
     Sized_relobj_file<32, true>::Symbols* sympointers,
     size_t* defined);
+// @LOCALMOD-BCLD-BEGIN
+template
+void
+Symbol_table::add_from_dynobj<32, true, Sized_pluginobj<32, true> >(
+    Sized_pluginobj<32, true>* dynobj,
+    const unsigned char* syms,
+    size_t count,
+    const char* sym_names,
+    size_t sym_name_size,
+    const unsigned char* versym,
+    size_t versym_size,
+    const std::vector<const char*>* version_map,
+    Sized_relobj_file<32, true>::Symbols* sympointers,
+    size_t* defined);
+// @LOCALMOD-BCLD-END
 #endif
 
 #ifdef HAVE_TARGET_64_LITTLE
 template
 void
-Symbol_table::add_from_dynobj<64, false>(
+Symbol_table::add_from_dynobj<64, false, Sized_dynobj<64, false> >( // @LOCALMOD-BCLD
     Sized_dynobj<64, false>* dynobj,
     const unsigned char* syms,
     size_t count,
@@ -3527,12 +3604,27 @@ Symbol_table::add_from_dynobj<64, false>(
     const std::vector<const char*>* version_map,
     Sized_relobj_file<64, false>::Symbols* sympointers,
     size_t* defined);
+// @LOCALMOD-BCLD-BEGIN
+template
+void
+Symbol_table::add_from_dynobj<64, false, Sized_pluginobj<64, false> >(
+    Sized_pluginobj<64, false>* dynobj,
+    const unsigned char* syms,
+    size_t count,
+    const char* sym_names,
+    size_t sym_name_size,
+    const unsigned char* versym,
+    size_t versym_size,
+    const std::vector<const char*>* version_map,
+    Sized_relobj_file<64, false>::Symbols* sympointers,
+    size_t* defined);
+// @LOCALMOD-BCLD-END
 #endif
 
 #ifdef HAVE_TARGET_64_BIG
 template
 void
-Symbol_table::add_from_dynobj<64, true>(
+Symbol_table::add_from_dynobj<64, true, Sized_dynobj<64, true> >( // @LOCALMOD-BCLD
     Sized_dynobj<64, true>* dynobj,
     const unsigned char* syms,
     size_t count,
@@ -3543,6 +3635,21 @@ Symbol_table::add_from_dynobj<64, true>(
     const std::vector<const char*>* version_map,
     Sized_relobj_file<64, true>::Symbols* sympointers,
     size_t* defined);
+// @LOCALMOD-BCLD-BEGIN
+template
+void
+Symbol_table::add_from_dynobj<64, true, Sized_pluginobj<64, true> >(
+    Sized_pluginobj<64, true>* dynobj,
+    const unsigned char* syms,
+    size_t count,
+    const char* sym_names,
+    size_t sym_name_size,
+    const unsigned char* versym,
+    size_t versym_size,
+    const std::vector<const char*>* version_map,
+    Sized_relobj_file<64, true>::Symbols* sympointers,
+    size_t* defined);
+// @LOCALMOD-BCLD-END
 #endif
 
 #ifdef HAVE_TARGET_32_LITTLE

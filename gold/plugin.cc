@@ -27,6 +27,7 @@
 #include <cstring>
 #include <string>
 #include <vector>
+#include <set> // @LOCALMOD-BCLD
 
 #ifdef ENABLE_PLUGINS
 #include <dlfcn.h>
@@ -42,6 +43,7 @@
 #include "readsyms.h"
 #include "symtab.h"
 #include "elfcpp.h"
+#include "defstd.h" // @LOCALMOD-BCLD
 
 namespace gold
 {
@@ -63,7 +65,8 @@ static enum ld_plugin_status
 register_cleanup(ld_plugin_cleanup_handler handler);
 
 static enum ld_plugin_status
-add_symbols(void *handle, int nsyms, const struct ld_plugin_symbol *syms);
+add_symbols(void *handle, int nsyms, const struct ld_plugin_symbol *syms,
+            int is_shared, const char *soname); // @LOCALMOD-BCLD
 
 static enum ld_plugin_status
 get_input_file(const void *handle, struct ld_plugin_input_file *file);
@@ -73,6 +76,23 @@ get_view(const void *handle, const void **viewp);
 
 static enum ld_plugin_status
 release_input_file(const void *handle);
+
+// @LOCALMOD-BCLD-BEGIN
+static const char*
+get_output_soname(void);
+
+static const char*
+get_needed(unsigned int index);
+
+static unsigned int
+get_num_needed(void);
+
+static const char*
+get_wrapped(unsigned int index);
+
+static unsigned int
+get_num_wrapped(void);
+// @LOCALMOD-BCLD-END
 
 static enum ld_plugin_status
 get_symbols(const void *handle, int nsyms, struct ld_plugin_symbol *syms);
@@ -120,7 +140,8 @@ allow_section_ordering();
 #endif // ENABLE_PLUGINS
 
 static Pluginobj* make_sized_plugin_object(Input_file* input_file,
-                                           off_t offset, off_t filesize);
+                                           off_t offset, off_t filesize,
+                                           bool is_shared); // @LOCALMOD-BCLD
 
 // Plugin methods.
 
@@ -159,7 +180,7 @@ Plugin::load()
   sscanf(ver, "%d.%d", &major, &minor);
 
   // Allocate and populate a transfer vector.
-  const int tv_fixed_size = 24;
+  const int tv_fixed_size = 29; // @LOCALMOD-BCLD
 
   int tv_size = this->args_.size() + tv_fixed_size;
   ld_plugin_tv* tv = new ld_plugin_tv[tv_size];
@@ -235,6 +256,28 @@ Plugin::load()
   ++i;
   tv[i].tv_tag = LDPT_GET_SYMBOLS_V2;
   tv[i].tv_u.tv_get_symbols = get_symbols_v2;
+
+  // @LOCALMOD-BCLD-BEGIN
+  ++i;
+  tv[i].tv_tag = LDPT_GET_OUTPUT_SONAME;
+  tv[i].tv_u.tv_get_output_soname = get_output_soname;
+
+  ++i;
+  tv[i].tv_tag = LDPT_GET_NEEDED;
+  tv[i].tv_u.tv_get_needed = get_needed;
+
+  ++i;
+  tv[i].tv_tag = LDPT_GET_NUM_NEEDED;
+  tv[i].tv_u.tv_get_num_needed = get_num_needed;
+
+  ++i;
+  tv[i].tv_tag = LDPT_GET_WRAPPED;
+  tv[i].tv_u.tv_get_wrapped = get_wrapped;
+
+  ++i;
+  tv[i].tv_tag = LDPT_GET_NUM_WRAPPED;
+  tv[i].tv_u.tv_get_num_wrapped = get_num_wrapped;
+  // @LOCALMOD-BCLD-END
 
   ++i;
   tv[i].tv_tag = LDPT_ADD_INPUT_FILE;
@@ -427,7 +470,7 @@ Plugin_manager::claim_file(Input_file* input_file, off_t offset,
 
           // If the plugin claimed the file but did not call the
           // add_symbols callback, we need to create the Pluginobj now.
-          Pluginobj* obj = this->make_plugin_object(handle);
+          Pluginobj* obj = this->make_plugin_object(handle, false); // @LOCALMOD-BCLD
           return obj;
         }
     }
@@ -478,6 +521,31 @@ Plugin_manager::all_symbols_read(Workqueue* workqueue, Task* task,
   this->dirpath_ = dirpath;
   this->mapfile_ = mapfile;
   this->this_blocker_ = NULL;
+
+  // @LOCALMOD-BCLD-BEGIN
+  // Create a list of wrapped symbols to export to the plugin.
+  wrapped_.clear();
+  for (options::String_set::const_iterator
+       it = parameters->options().wrap_begin(),
+       ie = parameters->options().wrap_end(); it != ie; ++it) {
+    wrapped_.push_back(*it);
+  }
+
+  if (parameters->options().soname())
+    this->output_soname_ = parameters->options().soname();
+  else
+    this->output_soname_ = "";
+
+  // This ignores the --as-needed directive and simply lists
+  // every dynamic object in the link. To do this correctly requires
+  // looping over the symbol table and identifying uses.
+  // TODO(pdox): Fix this when adding version info, since these
+  // pieces of info are generated in the same place
+  // (Symbol_table::set_dynsym_indexes).
+  this->needed_.clear();
+  input_objects->get_sonames(this->needed_);
+  // @LOCALMOD-BCLD-END
+
 
   for (this->current_ = this->plugins_.begin();
        this->current_ != this->plugins_.end();
@@ -659,7 +727,7 @@ Plugin_manager::cleanup()
 // the add_symbols API.
 
 Pluginobj*
-Plugin_manager::make_plugin_object(unsigned int handle)
+Plugin_manager::make_plugin_object(unsigned int handle, bool is_shared) // @LOCALMOD-BCLD
 {
   // Make sure we aren't asked to make an object for the same handle twice.
   if (this->objects_.size() != handle
@@ -668,7 +736,8 @@ Plugin_manager::make_plugin_object(unsigned int handle)
 
   Pluginobj* obj = make_sized_plugin_object(this->input_file_,
                                             this->plugin_input_file_.offset,
-                                            this->plugin_input_file_.filesize);
+                                            this->plugin_input_file_.filesize,
+                                            is_shared); // @LOCALMOD-BCLD
 
 
   // If the elf object for this file was pushed into the objects_ vector, delete
@@ -813,8 +882,8 @@ Plugin_manager::add_input_file(const char* pathname, bool is_lib)
 // Class Pluginobj.
 
 Pluginobj::Pluginobj(const std::string& name, Input_file* input_file,
-                     off_t offset, off_t filesize)
-  : Object(name, input_file, false, offset),
+                     off_t offset, off_t filesize, bool is_shared) // @LOCALMOD-BCLD
+    : Object(name, input_file, is_shared, offset), // @LOCALMOD-BCLD
     nsyms_(0), syms_(NULL), symbols_(), filesize_(filesize), comdat_map_()
 {
 }
@@ -846,6 +915,11 @@ is_visible_from_outside(Symbol* lsym)
     return true;
   if (parameters->options().export_dynamic() || parameters->options().shared())
     return lsym->is_externally_visible();
+  // @LOCALMOD-BCLD: Also visible_from_outside if ref'ed in PSO.
+  // may need to put this in is_referenced_from_outside to get the same
+  // behavior as hg binutils
+  if (lsym->needed_by_pso())
+    return true;
   return false;
 }
 
@@ -902,10 +976,14 @@ Pluginobj::get_symbol_resolution_info(int nsyms,
 	      else
 		res = LDPR_PREVAILING_DEF_IRONLY;
 	    }
-          else if (lsym->object()->pluginobj() != NULL)
-            res = LDPR_RESOLVED_IR;
+          // @LOCALMOD-BCLD-BEGIN
+          // Place the is_dynamic() case first, so that symbols found
+          // in a dynamic pluginobj are marked LDPR_RESOLVED_DYN.
           else if (lsym->object()->is_dynamic())
             res = LDPR_RESOLVED_DYN;
+          else if (lsym->object()->pluginobj() != NULL)
+            res = LDPR_RESOLVED_IR;
+          // @LOCALMOD-BCLD-END
           else
             res = LDPR_RESOLVED_EXEC;
         }
@@ -929,6 +1007,23 @@ Pluginobj::get_symbol_resolution_info(int nsyms,
                    : LDPR_PREEMPTED_REG);
         }
       isym->resolution = res;
+      // @LOCALMOD-BCLD-BEGIN
+      // Set the resolved symbol version and source file soname.
+      isym->version = const_cast<char*>(lsym->version());
+      if (lsym->version())
+        isym->is_default = lsym->is_default() ? 1 : 0;
+      else
+        isym->is_default = 0;
+      isym->dynfile = NULL;
+      if (res == LDPR_RESOLVED_DYN) {
+        if (lsym->object()->dynobj())
+          isym->dynfile = lsym->object()->dynobj()->soname();
+        else if (lsym->object()->pluginobj())
+          isym->dynfile = lsym->object()->pluginobj()->soname();
+        else
+          gold_error(_("Unknown dynamic object type in plugin"));
+      }
+      // @LOCALMOD-BCLD-END
     }
   return LDPS_OK;
 }
@@ -959,8 +1054,9 @@ Sized_pluginobj<size, big_endian>::Sized_pluginobj(
     const std::string& name,
     Input_file* input_file,
     off_t offset,
-    off_t filesize)
-  : Pluginobj(name, input_file, offset, filesize)
+    off_t filesize,
+    bool is_shared) // @LOCALMOD-BCLD
+    : Pluginobj(name, input_file, offset, filesize, is_shared) // @LOCALMOD-BCLD
 {
 }
 
@@ -983,6 +1079,32 @@ Sized_pluginobj<size, big_endian>::do_layout(Symbol_table*, Layout*,
   gold_unreachable();
 }
 
+// @LOCALMOD-BCLD-BEGIN
+// Look up "ver" in the version map. If it already exists, return its index.
+// If not, create an entry for it, and return the new entry's index.
+// If ver is NULL, instead return one of the reserved indexes representing
+// an unversioned symbol. (VER_NDX_LOCAL or VER_NDX_GLOBAL)
+static elfcpp::Elf_Half GetOrCreateMapIndex(
+    std::vector<const char*> *version_map,
+    const char *ver, bool isUndef)
+{
+  // Handle unversioned symbol.
+  if (ver == NULL)
+    return isUndef ? elfcpp::VER_NDX_LOCAL : elfcpp::VER_NDX_GLOBAL;
+
+  // Search for an existing entry for this version
+  elfcpp::Elf_Half idx;
+  for (idx = 0; idx < version_map->size(); ++idx)
+  {
+    if (strcmp((*version_map)[idx], ver) == 0)
+      return idx;
+  }
+  // Create a new entry
+  version_map->push_back(ver);
+  return idx;
+}
+// @LOCALMOD-BCLD-END
+
 // Add the symbols to the symbol table.
 
 template<int size, bool big_endian>
@@ -999,12 +1121,45 @@ Sized_pluginobj<size, big_endian>::do_add_symbols(Symbol_table* symtab,
   typedef typename elfcpp::Elf_types<size>::Elf_WXword Elf_size_type;
 
   this->symbols_.resize(this->nsyms_);
+  // @LOCALMOD-BCLD-BEGIN
+  // For the call to add_from_dynobj(), we need a
+  // buffer of all symbols and their names.
+  unsigned char *symdata = NULL;
+  char *sym_names = NULL;
+  int sym_names_size = 0;
+  int sym_names_index = 0;
+  int symdata_index = 0;
+  // versym: List of symbol version indexes (2 bytes per entry)
+  // (equivalent to contents of .gnu.version)
+  // This assumes little-endian ELF.
+  elfcpp::Elf_Half *versym = NULL;
+  // Size of versym in bytes
+  size_t versym_size = 0;
+  // version_map: Map the version index to the version name.
+  std::vector<const char*> version_map;
+  if (this->is_dynamic())
+    {
+      for (int i = 0; i < this->nsyms_; ++i)
+        sym_names_size += strlen(this->syms_[i].name) + 1;
+      symdata = new unsigned char[this->nsyms_ * sym_size];
+      sym_names = new char[sym_names_size];
+      versym_size = sizeof(elfcpp::Elf_Half)*this->nsyms_;
+      versym = new elfcpp::Elf_Half[this->nsyms_];
+      if (!symdata || !sym_names || !versym)
+        gold_error(_("buffer allocation failed in plugin"));
+      // The first two entries of the version-map are reserved.
+      version_map.push_back("VER_NDX_LOCAL");
+      version_map.push_back("VER_NDX_GLOBAL");
+    }
+  // @LOCALMOD-BCLD-END
 
   for (int i = 0; i < this->nsyms_; ++i)
     {
       const struct ld_plugin_symbol* isym = &this->syms_[i];
       const char* name = isym->name;
+      size_t namelen; // @LOCALMOD-BCLD
       const char* ver = isym->version;
+      bool is_default_version = false; // @LOCALMOD-BCLD
       elfcpp::Elf_Half shndx;
       elfcpp::STB bind;
       elfcpp::STV vis;
@@ -1013,6 +1168,26 @@ Sized_pluginobj<size, big_endian>::do_add_symbols(Symbol_table* symtab,
         name = NULL;
       if (ver != NULL && ver[0] == '\0')
         ver = NULL;
+
+      // @LOCALMOD-BCLD-BEGIN
+      // Set the version and hidden-bit from the name.
+      // Name has the form sym@VER or sym@@VER.
+      ver = strchr(name, '@');
+      if (ver)
+        {
+          namelen = ver - name;
+          ++ver;
+          if (ver[0] == '@')
+            {
+              is_default_version = true;
+              ++ver;
+            }
+        }
+      else
+        {
+          namelen = strlen(name);
+        }
+      // @LOCALMOD-BCLD-END
 
       switch (isym->def)
         {
@@ -1066,16 +1241,65 @@ Sized_pluginobj<size, big_endian>::do_add_symbols(Symbol_table* symtab,
           && !this->include_comdat_group(isym->comdat_key, layout))
         shndx = elfcpp::SHN_UNDEF;
 
-      osym.put_st_name(0);
-      osym.put_st_value(0);
-      osym.put_st_size(static_cast<Elf_size_type>(isym->size));
-      osym.put_st_info(bind, elfcpp::STT_NOTYPE);
-      osym.put_st_other(vis, 0);
-      osym.put_st_shndx(shndx);
+      // @LOCALMOD-BCLD-BEGIN
+      if (!this->is_dynamic())
+        {
+          osym.put_st_name(0);
+          osym.put_st_value(0);
+          osym.put_st_size(static_cast<Elf_size_type>(isym->size));
+          osym.put_st_info(bind, elfcpp::STT_NOTYPE);
+          osym.put_st_other(vis, 0);
+          osym.put_st_shndx(shndx);
 
-      this->symbols_[i] =
-        symtab->add_from_pluginobj<size, big_endian>(this, name, ver, &sym);
+          this->symbols_[i] =
+              symtab->add_from_pluginobj<size, big_endian>(this, name, namelen,
+                                                           ver,
+                                                           is_default_version,
+                                                           &sym);
+        }
+      else
+        {
+          // Create a mock ELF symbol entry for this symbol.
+          elfcpp::Sym_write<size, big_endian> dsym(symdata + symdata_index);
+          dsym.put_st_name(sym_names_index);
+          dsym.put_st_value(0);
+          dsym.put_st_size(static_cast<Elf_size_type>(isym->size));
+          // TODO(pdox): Set ELF type based on bitcode type.
+          dsym.put_st_info(bind, elfcpp::STT_NOTYPE);
+          dsym.put_st_other(vis, 0);
+          dsym.put_st_shndx(shndx);
+
+          // Setup string table entry for this symbol
+          strncpy(&sym_names[sym_names_index], name, namelen);
+          sym_names[sym_names_index + namelen] = '\0';
+          sym_names_index += namelen + 1;
+          symdata_index += sym_size;
+
+          // Setup versym entry for this symbol
+          versym[i] = GetOrCreateMapIndex(&version_map, ver,
+                                          shndx == elfcpp::SHN_UNDEF);
+          if (!is_default_version)
+            versym[i] |= elfcpp::VERSYM_HIDDEN;
+        }
+      // @LOCALMOD-BCLD-END
     }
+  // @LOCALMOD-BCLD-BEGIN
+  if (this->is_dynamic()) {
+    size_t defined;
+    // NOTE: The strings in version_map are copied by add_from_dynobj().
+    // It does not retain pointers, which is good, because these strings
+    // are owned by the caller (and ultimately, the plugin).
+    symtab->add_from_dynobj<size, big_endian>(this, symdata, this->nsyms_,
+                                              sym_names, sym_names_size,
+                                              (unsigned char*)versym,
+                                              versym_size, &version_map,
+                                              &this->symbols_,
+                                              &defined);
+    delete [] symdata;
+    delete [] sym_names;
+    delete [] versym;
+  }
+  // @LOCALMOD-BCLD-END
 }
 
 template<int size, bool big_endian>
@@ -1320,6 +1544,42 @@ class Plugin_finish : public Task
   Task_token* next_blocker_;
 };
 
+// @LOCALMOD-BCLD-BEGIN
+Undefined_Symbols_hook::~Undefined_Symbols_hook()
+{
+}
+
+// Return whether a Undefined_Symbols_hook task is runnable.
+
+Task_token*
+Undefined_Symbols_hook::is_runnable()
+{
+  if (this->this_blocker_ != NULL && this->this_blocker_->is_blocked())
+    return this->this_blocker_;
+  return NULL;
+}
+
+// Return a Task_locker for a Undefined_Symbols_hook task.
+
+void
+Undefined_Symbols_hook::locks(Task_locker* tl)
+{
+  tl->add(this, this->next_blocker_);
+}
+
+// Run the undefined symbols plugin hook.
+
+void
+Undefined_Symbols_hook::run(Workqueue* workqueue ATTRIBUTE_UNUSED)
+{
+  std::set<std::string> exceptions;
+  get_standard_symbols(exceptions);
+  exceptions.insert("_GLOBAL_OFFSET_TABLE_");
+  this->symtab_->assert_no_undefined_symbols(exceptions);
+}
+// @LOCALMOD-BCLD-END
+
+
 // Class Plugin_hook.
 
 Plugin_hook::~Plugin_hook()
@@ -1402,14 +1662,21 @@ register_cleanup(ld_plugin_cleanup_handler handler)
 // Add symbols from a plugin-claimed input file.
 
 static enum ld_plugin_status
-add_symbols(void* handle, int nsyms, const ld_plugin_symbol* syms)
+add_symbols(void* handle, int nsyms, const ld_plugin_symbol* syms,
+            int is_shared, const char *soname) // @LOCALMOD-BCLD
 {
   gold_assert(parameters->options().has_plugins());
   Pluginobj* obj = parameters->options().plugins()->make_plugin_object(
-      static_cast<unsigned int>(reinterpret_cast<intptr_t>(handle)));
+      static_cast<unsigned int>(reinterpret_cast<intptr_t>(handle)),
+      is_shared ? true : false); // @LOCALMOD-BCLD
   if (obj == NULL)
     return LDPS_ERR;
   obj->store_incoming_symbols(nsyms, syms);
+  // @LOCALMOD-BCLD-BEGIN
+  if (is_shared && soname) {
+    obj->set_soname(soname);
+  }
+  // @LOCALMOD-BCLD-END
   return LDPS_OK;
 }
 
@@ -1505,6 +1772,44 @@ set_extra_library_path(const char* path)
   gold_assert(parameters->options().has_plugins());
   return parameters->options().plugins()->set_extra_library_path(path);
 }
+
+// @LOCALMOD-BCLD-BEGIN
+static const char *
+get_output_soname(void)
+{
+  gold_assert(parameters->options().has_plugins());
+  return parameters->options().plugins()->get_output_soname();
+}
+
+static const char *
+get_needed(unsigned int index)
+{
+  gold_assert(parameters->options().has_plugins());
+  return parameters->options().plugins()->get_needed(index);
+}
+
+static unsigned int
+get_num_needed(void)
+{
+  gold_assert(parameters->options().has_plugins());
+  return parameters->options().plugins()->get_num_needed();
+}
+
+static const char *
+get_wrapped(unsigned int index)
+{
+  gold_assert(parameters->options().has_plugins());
+  options::String_set::const_iterator it;
+  return parameters->options().plugins()->get_wrapped(index);
+}
+
+static unsigned int
+get_num_wrapped(void)
+{
+  gold_assert(parameters->options().has_plugins());
+  return parameters->options().plugins()->get_num_wrapped();
+}
+// @LOCALMOD-BCLD-END
 
 // Issue a diagnostic message from a plugin.
 
@@ -1690,7 +1995,8 @@ allow_section_ordering()
 // Allocate a Pluginobj object of the appropriate size and endianness.
 
 static Pluginobj*
-make_sized_plugin_object(Input_file* input_file, off_t offset, off_t filesize)
+make_sized_plugin_object(Input_file* input_file, off_t offset, off_t filesize,
+                         bool is_shared) // @LOCALMOD-BCLD
 {
   Pluginobj* obj = NULL;
 
@@ -1702,7 +2008,8 @@ make_sized_plugin_object(Input_file* input_file, off_t offset, off_t filesize)
       if (target.is_big_endian())
 #ifdef HAVE_TARGET_32_BIG
         obj = new Sized_pluginobj<32, true>(input_file->filename(),
-                                            input_file, offset, filesize);
+                                            input_file, offset, filesize,
+                                            is_shared); // @LOCALMOD-BCLD
 #else
         gold_error(_("%s: not configured to support "
 		     "32-bit big-endian object"),
@@ -1711,7 +2018,8 @@ make_sized_plugin_object(Input_file* input_file, off_t offset, off_t filesize)
       else
 #ifdef HAVE_TARGET_32_LITTLE
         obj = new Sized_pluginobj<32, false>(input_file->filename(),
-                                             input_file, offset, filesize);
+                                             input_file, offset, filesize,
+                                             is_shared); // @LOCALMOD-BCLD
 #else
         gold_error(_("%s: not configured to support "
 		     "32-bit little-endian object"),
@@ -1723,7 +2031,8 @@ make_sized_plugin_object(Input_file* input_file, off_t offset, off_t filesize)
       if (target.is_big_endian())
 #ifdef HAVE_TARGET_64_BIG
         obj = new Sized_pluginobj<64, true>(input_file->filename(),
-                                            input_file, offset, filesize);
+                                            input_file, offset, filesize,
+                                            is_shared); // @LOCALMOD-BCLD
 #else
         gold_error(_("%s: not configured to support "
 		     "64-bit big-endian object"),
@@ -1732,7 +2041,8 @@ make_sized_plugin_object(Input_file* input_file, off_t offset, off_t filesize)
       else
 #ifdef HAVE_TARGET_64_LITTLE
         obj = new Sized_pluginobj<64, false>(input_file->filename(),
-                                             input_file, offset, filesize);
+                                             input_file, offset, filesize,
+                                             is_shared); // @LOCALMOD-BCLD
 #else
         gold_error(_("%s: not configured to support "
 		     "64-bit little-endian object"),

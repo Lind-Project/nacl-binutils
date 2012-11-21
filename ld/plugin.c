@@ -396,7 +396,8 @@ register_cleanup (ld_plugin_cleanup_handler handler)
 
 /* Add symbols from a plugin-claimed input file.  */
 static enum ld_plugin_status
-add_symbols (void *handle, int nsyms, const struct ld_plugin_symbol *syms)
+add_symbols (void *handle, int nsyms, const struct ld_plugin_symbol *syms,
+             int is_shared ATTRIBUTE_UNUSED, const char *soname ATTRIBUTE_UNUSED) // @LOCALMOD-BCLD
 {
   asymbol **symptrs;
   bfd *abfd = handle;

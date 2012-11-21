@@ -2727,6 +2727,11 @@ class Input_objects
   void
   print_cref(const Symbol_table*, FILE*) const;
 
+  // @LOCALMOD-BCLD-BEGIN
+  // Get sonames for dynamic objects given on the command-line.
+  void get_sonames(std::vector<std::string> &sonames) const;
+  // @LOCALMOD-BCLD-END
+
   // Iterate over all regular objects.
 
   Relobj_iterator

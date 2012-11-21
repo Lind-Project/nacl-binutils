@@ -1096,6 +1096,13 @@ class General_options
   DEFINE_uint64(Ttext, options::ONE_DASH, '\0', -1U,
                 N_("Set the address of the text segment"), N_("ADDRESS"));
 
+  // @LOCALMOD-BCLD-BEGIN
+  DEFINE_bool(undef_sym_check, options::TWO_DASHES, '\0', false,
+              N_("Check for undefined symbols before plugin replacement phase"),
+              N_("Don't check for undefined symbols before plugin replacement"
+                 " phase (default)"));
+  // @LOCALMOD-BCLD-END
+
   DEFINE_set(undefined, options::TWO_DASHES, 'u',
 	     N_("Create undefined reference to SYMBOL"), N_("SYMBOL"));
 

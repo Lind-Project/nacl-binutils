@@ -92,6 +92,11 @@ struct ld_plugin_symbol
   uint64_t size;
   char *comdat_key;
   int resolution;
+  // @LOCALMOD-BCLD-BEGIN
+  char const *dynfile; /* For LDPR_RESOLVED_DYN, this is set to the
+                          soname of the file providing this symbol */
+  int is_default;      /* Is this the default version of this symbol? */
+  // @LOCALMOD-BCLD-END
 };
 
 /* An object's section.  */
@@ -208,7 +213,47 @@ enum ld_plugin_status
 typedef
 enum ld_plugin_status
 (*ld_plugin_add_symbols) (void *handle, int nsyms,
-                          const struct ld_plugin_symbol *syms);
+                          const struct ld_plugin_symbol *syms,
+                          int is_shared, const char *soname); // @LOCALMOD-BCLD
+
+// @LOCALMOD-BCLD-BEGIN
+
+/* The linker's interface for getting the soname of the link output. */
+
+typedef
+const char *
+(*ld_plugin_get_output_soname) (void);
+
+/* The linker's interface for getting the i'th needed
+ * soname of the link output.
+ * Returns NULL if index >= num_needed
+ */
+typedef
+const char *
+(*ld_plugin_get_needed) (unsigned int index);
+
+/* The linker's interface for getting the number of needed
+ * sonames of the link output. */
+typedef
+unsigned int
+(*ld_plugin_get_num_needed) (void);
+
+/* The linker's interface for getting the i'th wrapped
+ * symbol name.
+ * Returns NULL if index >= num_wrapped
+ */
+typedef
+const char *
+(*ld_plugin_get_wrapped) (unsigned int index);
+
+/* The linker's interface for getting the number of
+ * wrapped symbols
+  */
+typedef
+unsigned int
+(*ld_plugin_get_num_wrapped) (void);
+
+// @LOCALMOD-BCLD-END
 
 /* The linker's interface for getting the input file information with
    an open (possibly re-opened) file descriptor.  */
@@ -340,6 +385,13 @@ enum ld_plugin_tag
   LDPT_REGISTER_CLEANUP_HOOK,
   LDPT_ADD_SYMBOLS,
   LDPT_GET_SYMBOLS,
+  // @LOCALMOD-BCLD-BEGIN
+  LDPT_GET_OUTPUT_SONAME,
+  LDPT_GET_NEEDED,
+  LDPT_GET_NUM_NEEDED,
+  LDPT_GET_WRAPPED,
+  LDPT_GET_NUM_WRAPPED,
+  // @LOCALMOD-BCLD-END
   LDPT_ADD_INPUT_FILE,
   LDPT_MESSAGE,
   LDPT_GET_INPUT_FILE,
@@ -372,6 +424,13 @@ struct ld_plugin_tv
     ld_plugin_register_cleanup tv_register_cleanup;
     ld_plugin_add_symbols tv_add_symbols;
     ld_plugin_get_symbols tv_get_symbols;
+    // @LOCALMOD-BCLD-BEGIN
+    ld_plugin_get_output_soname tv_get_output_soname;
+    ld_plugin_get_needed tv_get_needed;
+    ld_plugin_get_num_needed tv_get_num_needed;
+    ld_plugin_get_wrapped tv_get_wrapped;
+    ld_plugin_get_num_wrapped tv_get_num_wrapped;
+    // @LOCALMOD-BCLD-END
     ld_plugin_add_input_file tv_add_input_file;
     ld_plugin_message tv_message;
     ld_plugin_get_input_file tv_get_input_file;

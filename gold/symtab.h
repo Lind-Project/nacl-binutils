@@ -29,6 +29,7 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include <set> // @LOCALMOD-BCLD
 
 #include "elfcpp.h"
 #include "parameters.h"
@@ -330,6 +331,18 @@ class Symbol
   void
   set_in_real_elf()
   { this->in_real_elf_ = true; }
+
+  // @LOCALMOD-BCLD-BEGIN
+  // Return whether this symbol has been seen in an external
+  // plugin dynamic object.
+  bool
+  needed_by_pso() const
+  { return this->needed_by_pso_; }
+
+  void
+  set_needed_by_pso()
+  { this->needed_by_pso_ = true; }
+  // @LOCALMOD-BCLD-END
 
   // Return whether this symbol was defined in a section that was
   // discarded from the link.  This is used to control some error
@@ -1010,6 +1023,9 @@ class Symbol
   bool undef_binding_weak_ : 1;
   // True if this symbol is a predefined linker symbol (bit 34).
   bool is_predefined_ : 1;
+  // @LOCALMOD-BCLD
+  // True if we've seen this symbol in an external plugin dyn obj (bit 35).
+  bool needed_by_pso_ : 1;
 };
 
 // The parts of a symbol which are size specific.  Using a template
@@ -1342,16 +1358,22 @@ class Symbol_table
   template<int size, bool big_endian>
   Symbol*
   add_from_pluginobj(Sized_pluginobj<size, big_endian>* obj,
-                     const char* name, const char* ver,
+                     const char* name, size_t namelen, // @LOCALMOD-BCLD
+                     const char* ver, bool is_default_version, // @LOCALMOD-BCLD
                      elfcpp::Sym<size, big_endian>* sym);
 
   // Add COUNT dynamic symbols from the dynamic object DYNOBJ to the
   // symbol table.  SYMS is the symbols.  SYM_NAMES is their names.
   // SYM_NAME_SIZE is the size of SYM_NAMES.  The other parameters are
   // symbol version data.
-  template<int size, bool big_endian>
+  //
+  // @LOCALMOD-BCLD-BEGIN
+  // TODO(pdox): 'add_from_dynobj' has been generalized, and could be
+  //             renamed 'add_from_dynamic'.
+  template<int size, bool big_endian, class Sized_BaseType>
+  // @LOCALMOD-BCLD-END
   void
-  add_from_dynobj(Sized_dynobj<size, big_endian>* dynobj,
+  add_from_dynobj(Sized_BaseType* dynobj, // @LOCALMOD-BCLD
 		  const unsigned char* syms, size_t count,
 		  const char* sym_names, size_t sym_name_size,
 		  const unsigned char* versym, size_t versym_size,
@@ -1420,6 +1442,11 @@ class Symbol_table
   // Return the real symbol associated with the forwarder symbol FROM.
   Symbol*
   resolve_forwards(const Symbol* from) const;
+
+  // @LOCALMOD-BCLD-BEGIN
+  void
+  assert_no_undefined_symbols(const std::set<std::string> &exceptions) const;
+  // @LOCALMOD-BCLD-END
 
   // Return the sized version of a symbol in this table.
   template<int size>

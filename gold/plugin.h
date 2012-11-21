@@ -228,7 +228,7 @@ class Plugin_manager
   // Make a new Pluginobj object.  This is called when the plugin calls
   // the add_symbols API.
   Pluginobj*
-  make_plugin_object(unsigned int handle);
+  make_plugin_object(unsigned int handle, bool is_shared); // @LOCALMOD-BCLD
 
   // Return the object associated with the given HANDLE.
   Object*
@@ -284,6 +284,32 @@ class Plugin_manager
   Layout*
   layout()
   { return this->layout_; }
+
+  // @LOCALMOD-BCLD-BEGIN
+  const char *get_output_soname() const {
+    return output_soname_.c_str();
+  }
+
+  const char *get_needed(unsigned int index) const {
+    if (index < needed_.size())
+      return needed_[index].c_str();
+    return NULL;
+  }
+
+  unsigned int get_num_needed() const {
+    return needed_.size();
+  }
+
+  const char *get_wrapped(unsigned int index) const {
+    if (index < wrapped_.size())
+      return wrapped_[index].c_str();
+    return NULL;
+  }
+
+  unsigned int get_num_wrapped() const {
+    return wrapped_.size();
+  }
+  // @LOCALMOD-BCLD-END
 
  private:
   Plugin_manager(const Plugin_manager&);
@@ -373,6 +399,13 @@ class Plugin_manager
   Mapfile* mapfile_;
   Task_token* this_blocker_;
 
+  // @LOCALMOD-BCLD-BEGIN
+  // These are computed in all_symbols_read().
+  std::string output_soname_; // soname of the linker output
+  std::vector<std::string> needed_; // List of needed dynamic libraries
+  std::vector<std::string> wrapped_; // List of wrapped symbols
+  // @LOCALMOD-BCLD-END
+
   // An extra directory to seach for the libraries passed by
   // add_input_library.
   std::string extra_search_path_;
@@ -389,7 +422,7 @@ class Pluginobj : public Object
   typedef std::vector<Symbol*> Symbols;
 
   Pluginobj(const std::string& name, Input_file* input_file, off_t offset,
-            off_t filesize);
+            off_t filesize, bool is_shared); // @LOCALMOD-BCLD
 
   // Fill in the symbol resolution status for the given plugin symbols.
   ld_plugin_status
@@ -425,6 +458,15 @@ class Pluginobj : public Object
   filesize()
   { return this->filesize_; }
 
+  // @LOCALMOD-BCLD-BEGIN
+  // The soname of this shared object.
+  const char *soname() const
+  { return this->soname_.c_str(); }
+
+  void set_soname(const char *soname)
+  { this->soname_.assign(soname); }
+  // @LOCALMOD-BCLD-END
+
  protected:
   // Return TRUE if this is an object claimed by a plugin.
   virtual Pluginobj*
@@ -447,6 +489,8 @@ class Pluginobj : public Object
   // group in this object with that key should be kept.
   typedef Unordered_map<std::string, bool> Comdat_map;
   Comdat_map comdat_map_;
+
+  std::string soname_; // @LOCALMOD-BCLD
 };
 
 // A plugin object, size-specific version.
@@ -456,7 +500,7 @@ class Sized_pluginobj : public Pluginobj
 {
  public:
   Sized_pluginobj(const std::string& name, Input_file* input_file,
-                  off_t offset, off_t filesize);
+                  off_t offset, off_t filesize, bool is_shared); // @LOCALMOD-BCLD
 
   // Read the symbols.
   void
@@ -545,6 +589,47 @@ class Sized_pluginobj : public Pluginobj
 
  private:
 };
+
+// @LOCALMOD-BCLD-BEGIN
+class Undefined_Symbols_hook : public Task
+{
+ public:
+  Undefined_Symbols_hook(
+              const General_options& options, Input_objects* input_objects,
+	      Symbol_table* symtab, Layout* layout, Dirsearch* dirpath,
+	      Mapfile* mapfile, Task_token* this_blocker,
+	      Task_token* next_blocker)
+    : options_(options), input_objects_(input_objects), symtab_(symtab),
+      layout_(layout), dirpath_(dirpath), mapfile_(mapfile),
+      this_blocker_(this_blocker), next_blocker_(next_blocker)
+  { }
+
+  ~Undefined_Symbols_hook();
+
+  Task_token*
+  is_runnable();
+
+  void
+  locks(Task_locker*);
+
+  void
+  run(Workqueue*);
+
+  std::string
+  get_name() const
+  { return "Undefined_Symbols_hook"; }
+
+ private:
+  const General_options& options_;
+  Input_objects* input_objects_;
+  Symbol_table* symtab_;
+  Layout* layout_;
+  Dirsearch* dirpath_;
+  Mapfile* mapfile_;
+  Task_token* this_blocker_;
+  Task_token* next_blocker_;
+};
+// @LOCALMOD-BCLD-END
 
 // This Task handles handles the "all symbols read" event hook.
 // The plugin may add additional input files at this time, which must
