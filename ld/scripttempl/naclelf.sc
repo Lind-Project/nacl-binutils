@@ -282,7 +282,6 @@ SECTIONS
   ${CREATE_SHLIB+${RELOCATING+. = ${SHLIB_TEXT_START_ADDR} + SIZEOF_HEADERS;}}
   ${CREATE_PIE+${RELOCATING+. = ${SHLIB_TEXT_START_ADDR} + SIZEOF_HEADERS;}}
   ${INITIAL_READONLY_SECTIONS}
-  .note.gnu.build-id : { *(.note.gnu.build-id) }
 EOF
 
 test -n "${RELOCATING+0}" || unset NON_ALLOC_DYN
@@ -421,7 +420,8 @@ cat <<EOF
   ${CREATE_SHLIB+. = DEFINED(__nacl_rodata_after_text) ? . : ${SHLIB_TEXT_START_ADDR} + 0x10000000;}
 
   . = ALIGN(CONSTANT (COMMONPAGESIZE)); /* nacl wants page alignment */
-  ${WRITABLE_RODATA-${RODATA}} :rodata
+  .note.gnu.build-id : { *(.note.gnu.build-id) } :rodata
+  ${WRITABLE_RODATA-${RODATA}}
   .rodata1      ${RELOCATING-0} : { *(.rodata1) }
   .nacl_rpc_methods : { *(.nacl_rpc_methods) }
   ${CREATE_SHLIB-${SDATA2}}
