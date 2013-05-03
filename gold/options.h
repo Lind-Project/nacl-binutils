@@ -1101,6 +1101,11 @@ class General_options
               N_("Check for undefined symbols before plugin replacement phase"),
               N_("Don't check for undefined symbols before plugin replacement"
                  " phase (default)"));
+
+  // This option marks the given symbol as "allowed to be unresolved"
+  // for the sake of the undef-sym-check done for bitcode linking.
+  DEFINE_set(allow_unresolved, options::TWO_DASHES, '\0',
+       N_("Allow unresolved references to SYMBOL"), N_("SYMBOL"));
   // @LOCALMOD-BCLD-END
 
   DEFINE_set(undefined, options::TWO_DASHES, 'u',

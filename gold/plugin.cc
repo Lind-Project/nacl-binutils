@@ -1575,6 +1575,16 @@ Undefined_Symbols_hook::run(Workqueue* workqueue ATTRIBUTE_UNUSED)
   std::set<std::string> exceptions;
   get_standard_symbols(exceptions);
   exceptions.insert("_GLOBAL_OFFSET_TABLE_");
+
+  // Symbols specified as --allow-unresolved also get added to the set of
+  // exceptions - gold should not complain if they can't be resolved during the
+  // bitcode link.
+  for (options::String_set::const_iterator
+         p = options_.allow_unresolved_begin();
+         p != options_.allow_unresolved_end(); ++p) {
+    exceptions.insert(*p);
+  }
+
   this->symtab_->assert_no_undefined_symbols(exceptions);
 }
 // @LOCALMOD-BCLD-END
