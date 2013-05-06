@@ -27,7 +27,6 @@
 #include <cstring>
 #include <string>
 #include <vector>
-#include <set> // @LOCALMOD-BCLD
 
 #ifdef ENABLE_PLUGINS
 #include <dlfcn.h>
@@ -43,7 +42,6 @@
 #include "readsyms.h"
 #include "symtab.h"
 #include "elfcpp.h"
-#include "defstd.h" // @LOCALMOD-BCLD
 
 namespace gold
 {
@@ -1543,52 +1541,6 @@ class Plugin_finish : public Task
   Task_token* this_blocker_;
   Task_token* next_blocker_;
 };
-
-// @LOCALMOD-BCLD-BEGIN
-Undefined_Symbols_hook::~Undefined_Symbols_hook()
-{
-}
-
-// Return whether a Undefined_Symbols_hook task is runnable.
-
-Task_token*
-Undefined_Symbols_hook::is_runnable()
-{
-  if (this->this_blocker_ != NULL && this->this_blocker_->is_blocked())
-    return this->this_blocker_;
-  return NULL;
-}
-
-// Return a Task_locker for a Undefined_Symbols_hook task.
-
-void
-Undefined_Symbols_hook::locks(Task_locker* tl)
-{
-  tl->add(this, this->next_blocker_);
-}
-
-// Run the undefined symbols plugin hook.
-
-void
-Undefined_Symbols_hook::run(Workqueue* workqueue ATTRIBUTE_UNUSED)
-{
-  std::set<std::string> exceptions;
-  get_standard_symbols(exceptions);
-  exceptions.insert("_GLOBAL_OFFSET_TABLE_");
-
-  // Symbols specified as --allow-unresolved also get added to the set of
-  // exceptions - gold should not complain if they can't be resolved during the
-  // bitcode link.
-  for (options::String_set::const_iterator
-         p = options_.allow_unresolved_begin();
-         p != options_.allow_unresolved_end(); ++p) {
-    exceptions.insert(*p);
-  }
-
-  this->symtab_->assert_no_undefined_symbols(exceptions);
-}
-// @LOCALMOD-BCLD-END
-
 
 // Class Plugin_hook.
 

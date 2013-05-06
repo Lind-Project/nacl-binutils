@@ -590,47 +590,6 @@ class Sized_pluginobj : public Pluginobj
  private:
 };
 
-// @LOCALMOD-BCLD-BEGIN
-class Undefined_Symbols_hook : public Task
-{
- public:
-  Undefined_Symbols_hook(
-              const General_options& options, Input_objects* input_objects,
-	      Symbol_table* symtab, Layout* layout, Dirsearch* dirpath,
-	      Mapfile* mapfile, Task_token* this_blocker,
-	      Task_token* next_blocker)
-    : options_(options), input_objects_(input_objects), symtab_(symtab),
-      layout_(layout), dirpath_(dirpath), mapfile_(mapfile),
-      this_blocker_(this_blocker), next_blocker_(next_blocker)
-  { }
-
-  ~Undefined_Symbols_hook();
-
-  Task_token*
-  is_runnable();
-
-  void
-  locks(Task_locker*);
-
-  void
-  run(Workqueue*);
-
-  std::string
-  get_name() const
-  { return "Undefined_Symbols_hook"; }
-
- private:
-  const General_options& options_;
-  Input_objects* input_objects_;
-  Symbol_table* symtab_;
-  Layout* layout_;
-  Dirsearch* dirpath_;
-  Mapfile* mapfile_;
-  Task_token* this_blocker_;
-  Task_token* next_blocker_;
-};
-// @LOCALMOD-BCLD-END
-
 // This Task handles handles the "all symbols read" event hook.
 // The plugin may add additional input files at this time, which must
 // be queued for reading.

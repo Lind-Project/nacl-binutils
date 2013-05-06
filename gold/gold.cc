@@ -167,8 +167,82 @@ Gc_runner::run(Workqueue* workqueue, const Task* task)
 			this->mapfile_);
 }
 
-// Queue up the initial set of tasks for this link job.
 
+// @LOCALMOD-BCLD-BEGIN
+// This task verifies no undefined symbols remain in the bitcode (with known
+// exceptions) before LTO.  Note that this is different from the usual place
+// where gold checks for unresolved symbols.  The usual place (while
+// resolving relocations) applies only to native objects.  Bitcode linking
+// does not reach that stage.
+class Undefined_Symbols_task : public Task
+{
+ public:
+  Undefined_Symbols_task(
+              const General_options& options, Input_objects* input_objects,
+	      Symbol_table* symtab, Layout* layout, Dirsearch* dirpath,
+	      Mapfile* mapfile, Task_token* this_blocker,
+	      Task_token* next_blocker)
+    : options_(options), input_objects_(input_objects), symtab_(symtab),
+      layout_(layout), dirpath_(dirpath), mapfile_(mapfile),
+      this_blocker_(this_blocker), next_blocker_(next_blocker)
+  { }
+
+  ~Undefined_Symbols_task()
+  { }
+
+  Task_token*
+  is_runnable()
+  {
+    if (this->this_blocker_ != NULL && this->this_blocker_->is_blocked())
+      return this->this_blocker_;
+    return NULL;
+  }
+
+  void
+  locks(Task_locker* tl)
+  {
+    tl->add(this, this->next_blocker_);
+  }
+
+  void
+  run(Workqueue*);
+
+  std::string
+  get_name() const
+  { return "Undefined_Symbols_task"; }
+
+ private:
+  const General_options& options_;
+  Input_objects* input_objects_;
+  Symbol_table* symtab_;
+  Layout* layout_;
+  Dirsearch* dirpath_;
+  Mapfile* mapfile_;
+  Task_token* this_blocker_;
+  Task_token* next_blocker_;
+};
+
+void
+Undefined_Symbols_task::run(Workqueue* workqueue ATTRIBUTE_UNUSED)
+{
+  std::set<std::string> exceptions;
+  get_standard_symbols(exceptions);
+  exceptions.insert("_GLOBAL_OFFSET_TABLE_");
+
+  // Symbols specified as --allow-unresolved also get added to the set of
+  // exceptions - gold should not complain if they can't be resolved during
+  // the bitcode link.
+  for (options::String_set::const_iterator
+         p = options_.allow_unresolved_begin();
+         p != options_.allow_unresolved_end(); ++p) {
+    exceptions.insert(*p);
+  }
+
+  this->symtab_->assert_no_undefined_symbols(exceptions);
+}
+// @LOCALMOD-BCLD-END
+
+// Queue up the initial set of tasks for this link job.
 void
 queue_initial_tasks(const General_options& options,
 		    Dirsearch& search_path,
@@ -275,7 +349,7 @@ queue_initial_tasks(const General_options& options,
     {
       Task_token* next_blocker = new Task_token(true);
       next_blocker->add_blocker();
-      workqueue->queue(new Undefined_Symbols_hook(
+      workqueue->queue(new Undefined_Symbols_task(
                        options, input_objects, symtab, layout,
                        &search_path, mapfile, this_blocker,
                        next_blocker));
@@ -898,5 +972,6 @@ queue_final_tasks(const General_options& options,
 				     final_blocker,
 				     "Task_function Close_task_runner"));
 }
+
 
 } // End namespace gold.
