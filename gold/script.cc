@@ -2552,7 +2552,15 @@ Version_script_info::print_expression_list(
 // The remaining functions are extern "C", so it's clearer to not put
 // them in namespace gold.
 
-using namespace gold;
+// @LOCALMOD-SB-BEGIN
+// Since the header declared these in namespace gold, we should define them
+// in namespace gold too.  Otherwise, clang will throw an error (about
+// ambiguity), if they don't stay in namespace gold.
+// http://llvm.org/bugs/show_bug.cgi?id=12299
+
+//using namespace gold;
+namespace gold {
+// @LOCALMOD-SB-END
 
 // This function is called by the bison parser to return the next
 // token.
@@ -3407,3 +3415,5 @@ script_exp_function_length(void* closurev, const char* name, size_t namelen)
 
   return length;
 }
+
+} // End namespace gold.  @LOCALMOD-SB

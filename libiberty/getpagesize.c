@@ -60,7 +60,7 @@ BUGS
 # endif /* PAGESIZE */
 #endif /* GNU_OUR_PAGESIZE */
 
-int
+size_t // @LOCALMOD-SB
 getpagesize (void)
 {
   return (GNU_OUR_PAGESIZE);

@@ -59,6 +59,13 @@ was made to unlink the file because it is special.
 #endif
 #endif
 
+#if defined(__native_client__)
+int
+unlink_if_ordinary (const char *name __attribute__ ((__unused__)))
+{
+  return 0;
+}
+#else
 int
 unlink_if_ordinary (const char *name)
 {
@@ -70,3 +77,4 @@ unlink_if_ordinary (const char *name)
 
   return 1;
 }
+#endif

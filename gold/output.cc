@@ -38,6 +38,10 @@
 
 #include "dwarf.h"
 #include "parameters.h"
+// @LOCALMOD-SB
+#if defined(NACL_SRPC)
+#include "nacl_file.h"
+#endif
 #include "object.h"
 #include "symtab.h"
 #include "reloc.h"
@@ -4897,6 +4901,14 @@ Output_file::open(off_t file_size)
   // to improve the odds for open().
 
   // We let the name "-" mean "stdout"
+
+  // @LOCALMOD-SB-BEGIN
+#if defined(NACL_SRPC)
+  int o = nacl_file::NaClOpenFileDescriptor(this->name_);
+  if (o < 0)
+    gold_fatal(_("%s: open: %s"), this->name_, strerror(errno));
+  this->o_ = o;
+#else
   if (!this->is_temporary_)
     {
       if (strcmp(this->name_, "-") == 0)
@@ -4929,6 +4941,8 @@ Output_file::open(off_t file_size)
 	  this->o_ = o;
 	}
     }
+#endif
+// @LOCALMOD-SB-END
 
   this->map();
 }
@@ -4999,6 +5013,13 @@ Output_file::map_anonymous()
 bool
 Output_file::map_no_anonymous(bool writable)
 {
+  // @LOCALMOD-SB-BEGIN
+  // There is too much magic here for nacl so we fall back to
+  // Output_file::map_anonymous()
+#if defined(__native_client__)
+  return false;
+#endif
+  // @LOCALMOD-SB-END
   const int o = this->o_;
 
   // If the output file is not a regular file, don't try to mmap it;
