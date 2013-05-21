@@ -38,10 +38,7 @@
 
 #include "dwarf.h"
 #include "parameters.h"
-// @LOCALMOD-SB
-#if defined(NACL_SRPC)
-#include "nacl_file.h"
-#endif
+#include "nacl_file.h" // @LOCALMOD-SB
 #include "object.h"
 #include "symtab.h"
 #include "reloc.h"
@@ -4903,7 +4900,7 @@ Output_file::open(off_t file_size)
   // We let the name "-" mean "stdout"
 
   // @LOCALMOD-SB-BEGIN
-#if defined(NACL_SRPC)
+#if defined(__native_client__)
   int o = nacl_file::NaClOpenFileDescriptor(this->name_);
   if (o < 0)
     gold_fatal(_("%s: open: %s"), this->name_, strerror(errno));
