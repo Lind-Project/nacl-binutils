@@ -715,7 +715,9 @@ extern const bfd_target bfd_elf32_tilegx_be_vec;
 extern const bfd_target bfd_elf32_tilegx_le_vec;
 extern const bfd_target bfd_elf32_tilepro_vec;
 extern const bfd_target bfd_elf32_tradbigmips_vec;
+extern const bfd_target bfd_elf32_tradbigmips_nacl_vec;
 extern const bfd_target bfd_elf32_tradlittlemips_vec;
+extern const bfd_target bfd_elf32_tradlittlemips_nacl_vec;
 extern const bfd_target bfd_elf32_tradbigmips_freebsd_vec;
 extern const bfd_target bfd_elf32_tradlittlemips_freebsd_vec;
 extern const bfd_target bfd_elf32_us_cris_vec;
@@ -1091,7 +1093,9 @@ static const bfd_target * const _bfd_target_vector[] =
 	&bfd_elf32_tilegx_le_vec,
 	&bfd_elf32_tilepro_vec,
 	&bfd_elf32_tradbigmips_vec,
+	&bfd_elf32_tradbigmips_nacl_vec,
 	&bfd_elf32_tradlittlemips_vec,
+	&bfd_elf32_tradlittlemips_nacl_vec,
 	&bfd_elf32_tradbigmips_freebsd_vec,
 	&bfd_elf32_tradlittlemips_freebsd_vec,
 	&bfd_elf32_us_cris_vec,
