@@ -37,6 +37,7 @@
 #include "elfcpp.h"
 #include "options.h"
 #include "parameters.h"
+#include "stringpool.h"
 #include "debug.h"
 
 namespace gold
@@ -61,6 +62,7 @@ class Output_data_got_base;
 class Output_section;
 class Input_objects;
 class Task;
+class Versions;
 
 // The abstract class for target specific handling.
 
@@ -411,6 +413,20 @@ class Target
   void
   define_standard_symbols(Symbol_table* symtab, Layout* layout)
   { this->do_define_standard_symbols(symtab, layout); }
+
+  virtual bool
+  custom_set_dynsym_indexes() const
+  { return false; }
+
+  virtual unsigned int
+  set_dynsym_indexes(std::vector<Symbol*>*, unsigned int, std::vector<Symbol*>*,
+                     Stringpool*, Versions*, Symbol_table*) const
+  { gold_unreachable(); }
+
+  // Get the custom dynamic tag value.
+  virtual unsigned int
+  dynamic_tag_custom_value(elfcpp::DT) const
+  { gold_unreachable(); }
 
  protected:
   // This struct holds the constant information for a child class.  We

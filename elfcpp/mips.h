@@ -1,7 +1,8 @@
 // mips.h -- ELF definitions specific to EM_MIPS  -*- C++ -*-
 
 // Copyright 2012 Free Software Foundation, Inc.
-// Written by Aleksandar Simeonov <aleksandar.simeonov@rt-rk.com>.
+// Written by Sasa Stankovic <sasa.stankovic@rt-rk.com>
+//        and Aleksandar Simeonov <aleksandar.simeonov@rt-rk.com>.
 
 // This file is part of elfcpp.
 
@@ -96,21 +97,67 @@ enum
   R_MIPS_TLS_TPREL_HI16 = 49,
   R_MIPS_TLS_TPREL_LO16 = 50,
   R_MIPS_GLOB_DAT = 51,
+  // These relocs are used for the mips16.
   R_MIPS16_26 = 100,
   R_MIPS16_GPREL = 101,
   R_MIPS16_GOT16 = 102,
   R_MIPS16_CALL16 = 103,
   R_MIPS16_HI16 = 104,
   R_MIPS16_LO16 = 105,
+  R_MIPS16_TLS_GD = 106,
+  R_MIPS16_TLS_LDM = 107,
+  R_MIPS16_TLS_DTPREL_HI16 = 108,
+  R_MIPS16_TLS_DTPREL_LO16 = 109,
+  R_MIPS16_TLS_GOTTPREL = 110,
+  R_MIPS16_TLS_TPREL_HI16 = 111,
+  R_MIPS16_TLS_TPREL_LO16 = 112,
+
   R_MIPS_COPY = 126,
   R_MIPS_JUMP_SLOT = 127,
+
+  // These relocations are specific to microMIPS.
+  R_MICROMIPS_26_S1 = 133,
+  R_MICROMIPS_HI16 = 134,
+  R_MICROMIPS_LO16 = 135,
+  R_MICROMIPS_GPREL16 = 136,       // In Elf 64: alias R_MICROMIPS_GPREL
+  R_MICROMIPS_LITERAL = 137,
+  R_MICROMIPS_GOT16 = 138,         // In Elf 64: alias R_MICROMIPS_GOT
+  R_MICROMIPS_PC7_S1 = 139,
+  R_MICROMIPS_PC10_S1 = 140,
+  R_MICROMIPS_PC16_S1 = 141,
+  R_MICROMIPS_CALL16 = 142,        // In Elf 64: alias R_MICROMIPS_CALL
+  R_MICROMIPS_GOT_DISP = 145,
+  R_MICROMIPS_GOT_PAGE = 146,
+  R_MICROMIPS_GOT_OFST = 147,
+  R_MICROMIPS_GOT_HI16 = 148,
+  R_MICROMIPS_GOT_LO16 = 149,
+  R_MICROMIPS_SUB = 150,
+  R_MICROMIPS_HIGHER = 151,
+  R_MICROMIPS_HIGHEST = 152,
+  R_MICROMIPS_CALL_HI16 = 153,
+  R_MICROMIPS_CALL_LO16 = 154,
+  R_MICROMIPS_SCN_DISP = 155,
+  R_MICROMIPS_JALR = 156,
+  R_MICROMIPS_HI0_LO16 = 157,
+  // TLS relocations.
+  R_MICROMIPS_TLS_GD = 162,
+  R_MICROMIPS_TLS_LDM = 163,
+  R_MICROMIPS_TLS_DTPREL_HI16 = 164,
+  R_MICROMIPS_TLS_DTPREL_LO16 = 165,
+  R_MICROMIPS_TLS_GOTTPREL = 166,
+  R_MICROMIPS_TLS_TPREL_HI16 = 169,
+  R_MICROMIPS_TLS_TPREL_LO16 = 170,
+  // microMIPS GP- and PC-relative relocations.
+  R_MICROMIPS_GPREL7_S2 = 172,
+  R_MICROMIPS_PC23_S2 = 173,
+
   R_MIPS_PC32 = 248,
   R_MIPS_GNU_REL16_S2 = 250,
   R_MIPS_GNU_VTINHERIT = 253,
   R_MIPS_GNU_VTENTRY = 254
 };
 
-// Processor specific flags for the ELF header e_flags field.  */
+// Processor specific flags for the ELF header e_flags field.
 enum
 {
   // At least one .noreorder directive appears in the source.
@@ -261,6 +308,26 @@ enum
   TP_OFFSET = 0x7000,
   DTP_OFFSET = 0x8000
 };
+
+
+bool
+elf_st_is_mips16(unsigned char st_other)
+{ return (st_other & elfcpp::STO_MIPS16) == elfcpp::STO_MIPS16; }
+
+bool
+elf_st_is_micromips(unsigned char st_other)
+{ return (st_other & elfcpp::STO_MIPS_ISA) == elfcpp::STO_MICROMIPS; }
+
+// Whether the ABI is N32.
+bool
+abi_n32(elfcpp::Elf_Word e_flags)
+{ return (e_flags & elfcpp::EF_MIPS_ABI2) != 0; }
+
+// Whether the ABI is N64.
+bool
+abi_64(unsigned char ei_class)
+{ return ei_class == elfcpp::ELFCLASS64; }
+
 
 } // End namespace elfcpp.
 

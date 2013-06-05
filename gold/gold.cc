@@ -228,6 +228,7 @@ Undefined_Symbols_task::run(Workqueue* workqueue ATTRIBUTE_UNUSED)
   std::set<std::string> exceptions;
   get_standard_symbols(exceptions);
   exceptions.insert("_GLOBAL_OFFSET_TABLE_");
+  exceptions.insert("_gp_disp");
 
   // Symbols specified as --allow-unresolved also get added to the set of
   // exceptions - gold should not complain if they can't be resolved during
