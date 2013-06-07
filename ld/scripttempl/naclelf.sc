@@ -420,7 +420,12 @@ cat <<EOF
   ${CREATE_SHLIB+. = DEFINED(__nacl_rodata_after_text) ? . : ${SHLIB_TEXT_START_ADDR} + 0x10000000;}
 
   . = ALIGN(CONSTANT (COMMONPAGESIZE)); /* nacl wants page alignment */
-  .note.gnu.build-id : { *(.note.gnu.build-id) } :rodata
+  .note.gnu.build-id :
+  {
+    ${RELOCATING+PROVIDE_HIDDEN (__note_gnu_build_id_start = .);}
+    *(.note.gnu.build-id)
+    ${RELOCATING+PROVIDE_HIDDEN (__note_gnu_build_id_end = .);}
+  } :rodata
   ${WRITABLE_RODATA-${RODATA}}
   .rodata1      ${RELOCATING-0} : { *(.rodata1) }
   .nacl_rpc_methods : { *(.nacl_rpc_methods) }
