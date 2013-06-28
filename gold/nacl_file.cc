@@ -32,11 +32,12 @@
 #include <string>
 #include <vector>
 #include <fcntl.h>
+
 #include "native_client/src/public/imc_syscalls.h"
 #include "native_client/src/public/name_service.h"
 #include "native_client/src/shared/srpc/nacl_srpc.h"
+#include "native_client/src/untrusted/nacl/pnacl.h"
 
-#include <nacl/pnacl.h>
 #include "gold.h"
 
 using namespace gold;
