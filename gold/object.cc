@@ -2834,18 +2834,6 @@ Input_objects::check_dynamic_dependencies() const
     }
 }
 
-// @LOCALMOD-BCLD-BEGIN
-// Get the sonames of the dynamic libraries which were
-// specified on the command-line.
-void Input_objects::get_sonames(std::vector<std::string> &sonames) const
-{
-  for (Dynobj_list::const_iterator p = this->dynobj_list_.begin();
-       p != this->dynobj_list_.end();
-       ++p)
-    sonames.push_back((*p)->soname());
-}
-// @LOCALMOD-BCLD-END
-
 // Start processing an archive.
 
 void

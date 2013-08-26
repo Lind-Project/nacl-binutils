@@ -1294,16 +1294,14 @@ Symbol*
 Symbol_table::add_from_pluginobj(
     Sized_pluginobj<size, big_endian>* obj,
     const char* name,
-    size_t namelen, // @LOCALMOD-BCLD
     const char* ver,
-    bool is_default_version, // @LOCALMOD-BCLD
     elfcpp::Sym<size, big_endian>* sym)
 {
   unsigned int st_shndx = sym->get_st_shndx();
   bool is_ordinary = st_shndx < elfcpp::SHN_LORESERVE;
 
   Stringpool::Key ver_key = 0;
-  // @LOCALMOD-BCLD (removed line)
+  bool is_default_version = false;
   bool is_forced_local = false;
 
   if (ver != NULL)
@@ -1340,12 +1338,7 @@ Symbol_table::add_from_pluginobj(
     }
 
   Stringpool::Key name_key;
-  // @LOCALMOD-BCLD-BEGIN
-  // Modified to use explicit name length, so that we can chop off
-  // the version suffix.
-  name = this->namepool_.add_with_length(name, namelen, true,
-                                         &name_key);
-  // @LOCALMOD-BCLD-END
+  name = this->namepool_.add(name, true, &name_key);
 
   Sized_symbol<size>* res;
   res = this->add_from_object(obj, name, name_key, ver, ver_key,
@@ -1360,10 +1353,10 @@ Symbol_table::add_from_pluginobj(
 
 // Add all the symbols in a dynamic object to the hash table.
 
-template<int size, bool big_endian, class Sized_BaseType> // @LOCALMOD-BCLD
+template<int size, bool big_endian>
 void
 Symbol_table::add_from_dynobj(
-    Sized_BaseType* dynobj, // @LOCALMOD-BCLD
+    Sized_dynobj<size, big_endian>* dynobj,
     const unsigned char* syms,
     size_t count,
     const char* sym_names,
@@ -2394,13 +2387,14 @@ Symbol_table::set_dynsym_indexes(unsigned int index,
 				 Stringpool* dynpool,
 				 Versions* versions)
 {
-  std::vector<Symbol*> dyn_symbols;
+  std::vector<Symbol*> dyn_symbols; // @LOCALMOD-MIPS
 
   for (Symbol_table_type::iterator p = this->table_.begin();
        p != this->table_.end();
        ++p)
     {
       Symbol* sym = p->second;
+      // @LOCALMOD-MIPS-BEGIN
       if (!sym->should_add_dynsym_entry(this))
         sym->set_dynsym_index(-1U);
       else
@@ -2417,6 +2411,7 @@ Symbol_table::set_dynsym_indexes(unsigned int index,
        ++p)
     {
       Symbol* sym = *p;
+      // @LOCALMOD-MIPS-END
 
       // Note that SYM may already have a dynamic symbol index, since
       // some symbols appear more than once in the symbol table, with
@@ -3504,9 +3499,7 @@ Symbol*
 Symbol_table::add_from_pluginobj<32, false>(
     Sized_pluginobj<32, false>* obj,
     const char* name,
-    size_t namelen, // @LOCALMOD-BCLD
     const char* ver,
-    bool is_default_version, // @LOCALMOD-BCLD
     elfcpp::Sym<32, false>* sym);
 #endif
 
@@ -3516,9 +3509,7 @@ Symbol*
 Symbol_table::add_from_pluginobj<32, true>(
     Sized_pluginobj<32, true>* obj,
     const char* name,
-    size_t namelen, // @LOCALMOD-BCLD
     const char* ver,
-    bool is_default_version, // @LOCALMOD-BCLD
     elfcpp::Sym<32, true>* sym);
 #endif
 
@@ -3528,9 +3519,7 @@ Symbol*
 Symbol_table::add_from_pluginobj<64, false>(
     Sized_pluginobj<64, false>* obj,
     const char* name,
-    size_t namelen, // @LOCALMOD-BCLD
     const char* ver,
-    bool is_default_version, // @LOCALMOD-BCLD
     elfcpp::Sym<64, false>* sym);
 #endif
 
@@ -3540,16 +3529,14 @@ Symbol*
 Symbol_table::add_from_pluginobj<64, true>(
     Sized_pluginobj<64, true>* obj,
     const char* name,
-    size_t namelen, // @LOCALMOD-BCLD
     const char* ver,
-    bool is_default_version, // @LOCALMOD-BCLD
     elfcpp::Sym<64, true>* sym);
 #endif
 
 #ifdef HAVE_TARGET_32_LITTLE
 template
 void
-Symbol_table::add_from_dynobj<32, false, Sized_dynobj<32, false> >( // @LOCALMOD-BCLD
+Symbol_table::add_from_dynobj<32, false>(
     Sized_dynobj<32, false>* dynobj,
     const unsigned char* syms,
     size_t count,
@@ -3560,27 +3547,12 @@ Symbol_table::add_from_dynobj<32, false, Sized_dynobj<32, false> >( // @LOCALMOD
     const std::vector<const char*>* version_map,
     Sized_relobj_file<32, false>::Symbols* sympointers,
     size_t* defined);
-// @LOCALMOD-BCLD-BEGIN
-template
-void
-Symbol_table::add_from_dynobj<32, false, Sized_pluginobj<32, false> >(
-    Sized_pluginobj<32, false>* dynobj,
-    const unsigned char* syms,
-    size_t count,
-    const char* sym_names,
-    size_t sym_name_size,
-    const unsigned char* versym,
-    size_t versym_size,
-    const std::vector<const char*>* version_map,
-    Sized_relobj_file<32, false>::Symbols* sympointers,
-    size_t* defined);
-// @LOCALMOD-BCLD-END
 #endif
 
 #ifdef HAVE_TARGET_32_BIG
 template
 void
-Symbol_table::add_from_dynobj<32, true, Sized_dynobj<32, true> >( // @LOCALMOD-BCLD
+Symbol_table::add_from_dynobj<32, true>(
     Sized_dynobj<32, true>* dynobj,
     const unsigned char* syms,
     size_t count,
@@ -3591,27 +3563,12 @@ Symbol_table::add_from_dynobj<32, true, Sized_dynobj<32, true> >( // @LOCALMOD-B
     const std::vector<const char*>* version_map,
     Sized_relobj_file<32, true>::Symbols* sympointers,
     size_t* defined);
-// @LOCALMOD-BCLD-BEGIN
-template
-void
-Symbol_table::add_from_dynobj<32, true, Sized_pluginobj<32, true> >(
-    Sized_pluginobj<32, true>* dynobj,
-    const unsigned char* syms,
-    size_t count,
-    const char* sym_names,
-    size_t sym_name_size,
-    const unsigned char* versym,
-    size_t versym_size,
-    const std::vector<const char*>* version_map,
-    Sized_relobj_file<32, true>::Symbols* sympointers,
-    size_t* defined);
-// @LOCALMOD-BCLD-END
 #endif
 
 #ifdef HAVE_TARGET_64_LITTLE
 template
 void
-Symbol_table::add_from_dynobj<64, false, Sized_dynobj<64, false> >( // @LOCALMOD-BCLD
+Symbol_table::add_from_dynobj<64, false>(
     Sized_dynobj<64, false>* dynobj,
     const unsigned char* syms,
     size_t count,
@@ -3622,27 +3579,12 @@ Symbol_table::add_from_dynobj<64, false, Sized_dynobj<64, false> >( // @LOCALMOD
     const std::vector<const char*>* version_map,
     Sized_relobj_file<64, false>::Symbols* sympointers,
     size_t* defined);
-// @LOCALMOD-BCLD-BEGIN
-template
-void
-Symbol_table::add_from_dynobj<64, false, Sized_pluginobj<64, false> >(
-    Sized_pluginobj<64, false>* dynobj,
-    const unsigned char* syms,
-    size_t count,
-    const char* sym_names,
-    size_t sym_name_size,
-    const unsigned char* versym,
-    size_t versym_size,
-    const std::vector<const char*>* version_map,
-    Sized_relobj_file<64, false>::Symbols* sympointers,
-    size_t* defined);
-// @LOCALMOD-BCLD-END
 #endif
 
 #ifdef HAVE_TARGET_64_BIG
 template
 void
-Symbol_table::add_from_dynobj<64, true, Sized_dynobj<64, true> >( // @LOCALMOD-BCLD
+Symbol_table::add_from_dynobj<64, true>(
     Sized_dynobj<64, true>* dynobj,
     const unsigned char* syms,
     size_t count,
@@ -3653,21 +3595,6 @@ Symbol_table::add_from_dynobj<64, true, Sized_dynobj<64, true> >( // @LOCALMOD-B
     const std::vector<const char*>* version_map,
     Sized_relobj_file<64, true>::Symbols* sympointers,
     size_t* defined);
-// @LOCALMOD-BCLD-BEGIN
-template
-void
-Symbol_table::add_from_dynobj<64, true, Sized_pluginobj<64, true> >(
-    Sized_pluginobj<64, true>* dynobj,
-    const unsigned char* syms,
-    size_t count,
-    const char* sym_names,
-    size_t sym_name_size,
-    const unsigned char* versym,
-    size_t versym_size,
-    const std::vector<const char*>* version_map,
-    Sized_relobj_file<64, true>::Symbols* sympointers,
-    size_t* defined);
-// @LOCALMOD-BCLD-END
 #endif
 
 #ifdef HAVE_TARGET_32_LITTLE
@@ -3728,31 +3655,33 @@ Symbol_table::define_with_copy_reloc<64>(
     elfcpp::Elf_types<64>::Elf_Addr value);
 #endif
 
+// @LOCALMOD-MIPS-BEGIN
 #if defined(HAVE_TARGET_32_LITTLE) || defined(HAVE_TARGET_32_BIG)
 template
 void
 Sized_symbol<32>::init_output_data(const char* name, const char* version,
-				   Output_data* od, Value_type value,
-				   Size_type symsize, elfcpp::STT type,
-				   elfcpp::STB binding,
-				   elfcpp::STV visibility,
-				   unsigned char nonvis,
-				   bool offset_is_from_end,
-				   bool is_predefined);
+                                   Output_data* od, Value_type value,
+                                   Size_type symsize, elfcpp::STT type,
+                                   elfcpp::STB binding,
+                                   elfcpp::STV visibility,
+                                   unsigned char nonvis,
+                                   bool offset_is_from_end,
+                                   bool is_predefined);
 #endif
 
 #if defined(HAVE_TARGET_64_LITTLE) || defined(HAVE_TARGET_64_BIG)
 template
 void
 Sized_symbol<64>::init_output_data(const char* name, const char* version,
-				   Output_data* od, Value_type value,
-				   Size_type symsize, elfcpp::STT type,
-				   elfcpp::STB binding,
-				   elfcpp::STV visibility,
-				   unsigned char nonvis,
-				   bool offset_is_from_end,
-				   bool is_predefined);
+                                   Output_data* od, Value_type value,
+                                   Size_type symsize, elfcpp::STT type,
+                                   elfcpp::STB binding,
+                                   elfcpp::STV visibility,
+                                   unsigned char nonvis,
+                                   bool offset_is_from_end,
+                                   bool is_predefined);
 #endif
+// @LOCALMOD-MIPS-END
 
 #ifdef HAVE_TARGET_32_LITTLE
 template

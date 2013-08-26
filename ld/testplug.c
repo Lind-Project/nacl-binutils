@@ -547,8 +547,7 @@ onclaim_file (const struct ld_plugin_input_file *file, int *claimed)
 	return LDPS_ERR;
       else if (claimfile->n_syms_used)
 	return (*tv_add_symbols) (claimfile->file.handle,
-                                  claimfile->n_syms_used, claimfile->symbols,
-                                  FALSE, NULL); // @LOCALMOD-BCLD
+				claimfile->n_syms_used, claimfile->symbols);
     }
 
   return claim_file_ret;

@@ -298,16 +298,6 @@ Symbol_table::resolve(Sized_symbol<size>* to,
   // symbol is referenced from outside the world known to the plugin).
   if (object->pluginobj() == NULL && !object->is_dynamic())
     to->set_in_real_elf();
-  // @LOCALMOD-BCLD-BEGIN
-  else if (object->pluginobj() != NULL &&
-           object->is_dynamic() &&
-           st_shndx == elfcpp::SHN_UNDEF) {
-    // Record that this is needed-by an external dynamic plugin object too
-    // (a PSO).  That is, in a sense, similar to set_in_real_elf(),
-    // which is used to check that the symbol is "externally" visible.
-    to->set_needed_by_pso();
-  }
-  // @LOCALMOD-BCLD-END
 
   // If we're processing replacement files, allow new symbols to override
   // the placeholders from the plugin objects.

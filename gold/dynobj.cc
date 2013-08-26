@@ -724,8 +724,7 @@ Sized_dynobj<size, big_endian>::do_add_symbols(Symbol_table* symtab,
 
   const char* sym_names =
     reinterpret_cast<const char*>(sd->symbol_names->data());
-  // @LOCALMOD-BCLD
-  symtab->add_from_dynobj<size,big_endian>(this, sd->symbols->data(), symcount,
+  symtab->add_from_dynobj(this, sd->symbols->data(), symcount,
 			  sym_names, sd->symbol_names_size,
 			  (sd->versym == NULL
 			   ? NULL
