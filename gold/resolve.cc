@@ -445,9 +445,14 @@ Symbol_table::should_override(const Symbol* to, unsigned int frombits,
 			      to->type());
     }
 
-  if (to->type() == elfcpp::STT_TLS
-      ? fromtype != elfcpp::STT_TLS
-      : fromtype == elfcpp::STT_TLS)
+  // @LOCALMOD-BCLD-BEGIN
+  // The plugin interface doesn't tell us whether a symbol is TLS. So only do
+  // this check if neither the existing nor the new symbol is from a plugin.
+  if ((to->type() == elfcpp::STT_TLS
+       ? fromtype != elfcpp::STT_TLS
+       : fromtype == elfcpp::STT_TLS) &&
+      (!object->pluginobj() && to->in_real_elf()))
+    // @LOCALMOD-BCLD-END
     Symbol_table::report_resolve_problem(true,
 					 _("symbol '%s' used as both __thread "
 					   "and non-__thread"),
