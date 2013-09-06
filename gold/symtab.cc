@@ -88,6 +88,11 @@ Symbol::init_fields(const char* name, const char* version,
 static std::string
 demangle(const char* name)
 {
+// @LOCALMOD-BEGIN: Prune out demangling support in log messages,
+// since stable PNaCl pexes don't have symbol names.
+#if defined(__native_client__)
+  return name;
+#else
   if (!parameters->options().do_demangle())
     return name;
 
@@ -100,6 +105,8 @@ demangle(const char* name)
   std::string retval(demangled_name);
   free(demangled_name);
   return retval;
+#endif
+// @LOCALMOD-END
 }
 
 std::string
