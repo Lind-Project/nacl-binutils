@@ -35,6 +35,8 @@
 #include "dw2gencfi.h"
 #include "elf/x86-64.h"
 #include "opcodes/i386-init.h"
+#include "sb.h"
+#include "macro.h"
 
 #ifndef REGISTER_WARNINGS
 #define REGISTER_WARNINGS 1
@@ -184,6 +186,7 @@ static void s_bss (int);
 #endif
 #if defined (OBJ_ELF) || defined (OBJ_MAYBE_ELF)
 static void handle_large_common (int small ATTRIBUTE_UNUSED);
+static void nativeclient_init (void);
 #endif
 
 static const char *default_arch = DEFAULT_ARCH;
@@ -265,6 +268,11 @@ struct _i386_insn
     /* SEG gives the seg_entries of this insn.  They are zero unless
        explicit segment overrides are given.  */
     const seg_entry *seg[2];
+
+    /* NaCl-style truncation for data accesses: if the %nacl prefix is used for
+       an address it means the index register should be truncated to 32bit.
+       Base register is untouched. */
+    char nacl_truncate[2];
 
     /* PREFIX holds all the given prefix opcodes (usually null).
        PREFIXES is the number of prefix opcodes.  */
@@ -515,6 +523,9 @@ unsigned int x86_dwarf2_return_column;
 
 /* The dwarf2 data alignment, adjusted for 32 or 64 bit.  */
 int x86_cie_data_alignment;
+
+/* NativeClient support */
+#define NACL_ALIGNMENT 5
 
 /* Interface to relax_segment.
    There are 3 major relax states for 386 jump insns because the
@@ -1091,7 +1102,9 @@ i386_align_code (fragS *fragP, int count)
     {
       const char *const *patt = NULL;
 
-      if (fragP->tc_frag_data.isa == PROCESSOR_UNKNOWN)
+      if (!optimize_align_code)
+        patt = f32_patt;
+      else if (fragP->tc_frag_data.isa == PROCESSOR_UNKNOWN)
 	{
 	  /* PROCESSOR_UNKNOWN means that all ISAs may be used.  */
 	  switch (cpu_arch_tune)
@@ -1935,7 +1948,7 @@ enum PREFIX_GROUP
  */
 
 static enum PREFIX_GROUP
-add_prefix (unsigned int prefix)
+add_prefix (unsigned int prefix, int duplicate_are_errors)
 {
   enum PREFIX_GROUP ret = PREFIX_OTHER;
   unsigned int q;
@@ -1998,7 +2011,7 @@ add_prefix (unsigned int prefix)
 	++i.prefixes;
       i.prefix[q] |= prefix;
     }
-  else
+  else if (duplicate_are_errors)
     as_bad (_("same type of prefix used twice"));
 
   return ret;
@@ -2314,6 +2327,73 @@ i386_mach (void)
   else
     as_fatal (_("unknown architecture"));
 }
+
+/* This is a silly hack to predefine a macro without reading an input file.  */
+static size_t
+naclinit_get_line (sb *s)
+{
+  static const char *lines_32[] = {
+    "naclret",
+    "pop %ecx",
+    "nacljmp %ecx",
+    ".endm",
+    NULL
+  };
+  static const char *lines_64[] = {
+    "naclret",
+    "pop %r11",
+    "nacljmp %r11d, %r15",
+    ".endm",
+    NULL
+  };
+  static const char **next;
+  if (next == NULL)
+    next = flag_code == CODE_64BIT ? lines_64 : lines_32;
+  if (*next == NULL)
+    return 0;
+  sb_add_string (s, *next++);
+  return '\n';
+}
+
+void
+nativeclient_init ()
+{
+  symbolS *symbolP;
+  static char align[] = " " XSTRING(NACL_ALIGNMENT) "\n";
+  char *hold;
+  sb s;
+
+  /*
+   * A symbol conveying the setting of NACL_ALIGNMENT to assembler writers.
+   */
+  symbolP = symbol_new ("NACLALIGN", absolute_section,
+			(valueT) NACL_ALIGNMENT, &zero_address_frag);
+  symbol_table_insert (symbolP);
+
+  /*
+   * A symbol conveying the function entry alignment.  Left here for backwards
+   * compatibility with old assembly sources.
+   */
+  symbolP = symbol_new ("NACLENTRYALIGN", absolute_section,
+			(valueT) NACL_ALIGNMENT, &zero_address_frag);
+  symbol_table_insert (symbolP);
+
+  hold = input_line_pointer;
+  input_line_pointer = align;
+  s_bundle_align_mode(0);
+  input_line_pointer = hold;
+
+  /*
+   * Create naclret macro and enable bundle_align_mode
+   */
+  sb_new (&s);
+  naclinit_get_line (&s);
+  const char *err = define_macro (0, &s, NULL, naclinit_get_line,
+                                  "<built-in>", 0, NULL);
+  gas_assert (err == NULL);
+  sb_kill (&s);
+
+}
 
 void
 md_begin (void)
@@ -2431,7 +2511,7 @@ md_begin (void)
 #if defined (OBJ_ELF) || defined (OBJ_MAYBE_ELF)
   if (IS_ELF)
     {
-      record_alignment (text_section, 2);
+      record_alignment (text_section, NACL_ALIGNMENT);
       record_alignment (data_section, 2);
       record_alignment (bss_section, 2);
     }
@@ -2452,6 +2532,8 @@ md_begin (void)
       x86_dwarf2_return_column = 8;
       x86_cie_data_alignment = -4;
     }
+
+  nativeclient_init ();
 }
 
 void
@@ -3065,6 +3147,11 @@ check_hle (void)
     }
 }
 
+/* Sometimes we defer processing of "prefix" command to correctly combine them.
+   If this varible is not zero then we already have initialized information in
+   "i" and should not clean it */
+int single_standalone_prefix = 0;
+
 /* This is the guts of the machine-dependent assembler.  LINE points to a
    machine dependent instruction.  This function is supposed to emit
    the frags/bytes it assembles to.  */
@@ -3077,7 +3164,8 @@ md_assemble (char *line)
   const insn_template *t;
 
   /* Initialize globals.  */
-  memset (&i, '\0', sizeof (i));
+  if (!single_standalone_prefix)
+    memset (&i, '\0', sizeof (i));
   for (j = 0; j < MAX_OPERANDS; j++)
     i.reloc[j] = NO_RELOC;
   memset (disp_expressions, '\0', sizeof (disp_expressions));
@@ -3089,7 +3177,7 @@ md_assemble (char *line)
      start of a (possibly prefixed) mnemonic.  */
 
   line = parse_insn (line, mnemonic);
-  if (line == NULL)
+  if (line == NULL || single_standalone_prefix)
     return;
 
   line = parse_operands (line, mnemonic);
@@ -3168,7 +3256,7 @@ md_assemble (char *line)
     }
 
   if (i.tm.opcode_modifier.fwait)
-    if (!add_prefix (FWAIT_OPCODE))
+    if (!add_prefix (FWAIT_OPCODE, 1))
       return;
 
   /* Check for lock without a lockable instruction.  Destination operand
@@ -3303,7 +3391,7 @@ md_assemble (char *line)
     }
 
   if (i.rex != 0)
-    add_prefix (REX_OPCODE | i.rex);
+    add_prefix (REX_OPCODE | i.rex, 1);
 
   /* We are ready to output the insn.  */
   output_insn ();
@@ -3318,6 +3406,8 @@ parse_insn (char *line, char *mnemonic)
   int supported;
   const insn_template *t;
   char *dot_p = NULL;
+  single_standalone_prefix = 0;
+  int standalone_prefix;
 
   /* Non-zero if we found a prefix only acceptable with string insns.  */
   const char *expecting_string_instruction = NULL;
@@ -3359,11 +3449,11 @@ parse_insn (char *line, char *mnemonic)
       /* Look up instruction (or prefix) via hash table.  */
       current_templates = (const templates *) hash_find (op_hash, mnemonic);
 
-      if (*l != END_OF_INSN
-	  && (!is_space_char (*l) || l[1] != END_OF_INSN)
-	  && current_templates
+      if (current_templates
 	  && current_templates->start->opcode_modifier.isprefix)
 	{
+	  standalone_prefix = (*l == END_OF_INSN)
+			      || (is_space_char (*l) && l[1] == END_OF_INSN);
 	  if (!cpu_flags_check_cpu64 (current_templates->start->cpu_flags))
 	    {
 	      as_bad ((flag_code != CODE_64BIT
@@ -3374,7 +3464,8 @@ parse_insn (char *line, char *mnemonic)
 	    }
 	  /* If we are in 16-bit mode, do not allow addr16 or data16.
 	     Similarly, in 32-bit mode, do not allow addr32 or data32.  */
-	  if ((current_templates->start->opcode_modifier.size16
+	  if (!standalone_prefix
+	      && (current_templates->start->opcode_modifier.size16
 	       || current_templates->start->opcode_modifier.size32)
 	      && flag_code != CODE_64BIT
 	      && (current_templates->start->opcode_modifier.size32
@@ -3384,22 +3475,42 @@ parse_insn (char *line, char *mnemonic)
 		      current_templates->start->name);
 	      return NULL;
 	    }
-	  /* Add prefix, checking for repeated prefixes.  */
-	  switch (add_prefix (current_templates->start->base_opcode))
+	  if (standalone_prefix)
 	    {
-	    case PREFIX_EXIST:
-	      return NULL;
-	    case PREFIX_REP:
-	      if (current_templates->start->cpu_flags.bitfield.cpuhle)
-		i.have_hle = 1;
-	      else
-		expecting_string_instruction = current_templates->start->name;
-	      break;
-	    default:
+	      /* Add prefix, checking for repeated prefixes.  */
+	      switch (add_prefix (current_templates->start->base_opcode, 0))
+		{
+		  /* Duplicated prefix - process as standalone instruction */
+		  case PREFIX_EXIST:
+		    return l;
+		  case PREFIX_LOCK:
+		  case PREFIX_REP:
+		    single_standalone_prefix = 1;
+		    break;
+		  default:
+		    break;
+		}
 	      break;
 	    }
-	  /* Skip past PREFIX_SEPARATOR and reset token_start.  */
-	  token_start = ++l;
+	  else
+	    {
+	      /* Add prefix, checking for repeated prefixes.  */
+	      switch (add_prefix (current_templates->start->base_opcode, 1))
+		{
+		  case PREFIX_EXIST:
+		    return NULL;
+		  case PREFIX_REP:
+		    if (current_templates->start->cpu_flags.bitfield.cpuhle)
+		      i.have_hle = 1;
+		    else
+		      expecting_string_instruction = current_templates->start->name;
+		    break;
+		  default:
+		    break;
+		}
+	      /* Skip past PREFIX_SEPARATOR and reset token_start.  */
+	      token_start = ++l;
+	    }
 	}
       else
 	break;
@@ -3489,13 +3600,13 @@ check_suffix:
 	{
 	  if (l[2] == 't')
 	    {
-	      if (!add_prefix (DS_PREFIX_OPCODE))
+	      if (!add_prefix (DS_PREFIX_OPCODE, 1))
 		return NULL;
 	      l += 3;
 	    }
 	  else if (l[2] == 'n')
 	    {
-	      if (!add_prefix (CS_PREFIX_OPCODE))
+	      if (!add_prefix (CS_PREFIX_OPCODE, 1))
 		return NULL;
 	      l += 3;
 	    }
@@ -3722,6 +3833,12 @@ swap_operands (void)
   if (i.mem_operands == 2)
     {
       const seg_entry *temp_seg;
+      char nacl_truncate;
+
+      nacl_truncate = i.nacl_truncate[0];
+      i.nacl_truncate[0] = i.nacl_truncate[1];
+      i.nacl_truncate[1] = nacl_truncate;
+
       temp_seg = i.seg[0];
       i.seg[0] = i.seg[1];
       i.seg[1] = temp_seg;
@@ -4234,6 +4351,7 @@ check_reverse:
 	      if (!operand_type_match (overlap0, i.types[0])
 		  || !operand_type_match (overlap1, i.types[1])
 		  || (check_register
+		      && !t->opcode_modifier.isstring
 		      && !operand_type_register_match (overlap0,
 						       i.types[0],
 						       operand_types[1],
@@ -4680,7 +4798,7 @@ process_suffix (void)
 	       && i.op->regs[0].reg_type.bitfield.reg16)
 	      || (flag_code != CODE_32BIT
 		  && i.op->regs[0].reg_type.bitfield.reg32))
-	    if (!add_prefix (ADDR_PREFIX_OPCODE))
+	    if (!add_prefix (ADDR_PREFIX_OPCODE, 1))
 	      return 0;
 	}
       else if (i.suffix != QWORD_MNEM_SUFFIX
@@ -4696,7 +4814,7 @@ process_suffix (void)
 	  if (i.tm.opcode_modifier.jumpbyte) /* jcxz, loop */
 	    prefix = ADDR_PREFIX_OPCODE;
 
-	  if (!add_prefix (prefix))
+	  if (!add_prefix (prefix, 1))
 	    return 0;
 	}
 
@@ -4744,6 +4862,10 @@ check_byte_reg (void)
 
       /* crc32 doesn't generate this warning.  */
       if (i.tm.base_opcode == 0xf20f38f0)
+	continue;
+
+      /* Native client string instruction: sandbox register is always 64bit */
+      if (op == 2 && i.tm.opcode_modifier.isstring)
 	continue;
 
       if ((i.types[op].bitfield.reg16
@@ -5276,7 +5398,7 @@ duplicate:
      always be used.  */
   if ((i.seg[0]) && (i.seg[0] != default_seg))
     {
-      if (!add_prefix (i.seg[0]->seg_prefix))
+      if (!add_prefix (i.seg[0]->seg_prefix, 1))
 	return 0;
     }
   return 1;
@@ -5555,7 +5677,7 @@ build_modrm_byte (void)
 	      && !i.types[1].bitfield.control)
 	    abort ();
 	  i.rex &= ~(REX_R | REX_B);
-	  add_prefix (LOCK_PREFIX_OPCODE);
+	  add_prefix (LOCK_PREFIX_OPCODE, 1);
 	}
     }
   else
@@ -6202,6 +6324,243 @@ output_interseg_jump (void)
 }
 
 static void
+insert_sandbox_jmp (void)
+{
+  char* p;
+  int align_mask = (1 << NACL_ALIGNMENT) - 1;
+
+  if (getenv("NACL_DEBUG_ALIGN")) {
+    if (i.rex & REX_B) {
+      p = frag_more (12);
+      p[0] = 0x40 | (i.rex & REX_B);
+      p[1] = 0xF7; p[2] = 0xC0 + i.rm.regmem; // TEST reg, align_mask
+      p[3] = align_mask; p[4] = p[5] = p[6] = 0x00;
+      p[7] = 0x74; p[8] = 0x03; // JZ +3
+      p[9] = 0xCC;
+      p[10] = 0x66; p[11] = 0x90; // NOP
+    } else {
+      p = frag_more (12);
+      p[0] = 0xF7; p[1] = 0xC0 + i.rm.regmem;
+      p[2] = align_mask; p[3] = p[4] = p[5] = 0x00; // TEST reg, align_mask
+      p[6] = 0x74; p[7] = 0x04; // JZ +4
+      p[8] = 0xCC; // INT3
+      p[9] = 0x66; p[10] = 0x66; p[11] = 0x90; // NOP
+    }
+  }
+  else {
+    if (i.rex & REX_B) {
+      p = frag_more (4);
+      p[0] = 0x40 | (i.rex & REX_B);
+      p[1] = 0x83; // AND instruction
+      p[2] = (0xe0 + i.rm.regmem); // mod = 11, reg = 100,  rm = i.rm.regmem
+#ifdef TC_NACL_C
+      p[3] = 0xff & ~align_mask;
+#else
+      p[3] = 0xff;
+#endif
+    } else {
+      p = frag_more (3);
+      p[0] = 0x83; // AND instruction.
+      p[1] = (0xe0 + i.rm.regmem); // mod = 11, reg = 100,  rm = i.rm.regmem
+#ifdef TC_NACL_C
+      p[2] = 0xff & ~align_mask;
+#else
+      p[2] = 0xff;
+#endif
+    }
+    if (i.operands == 2) {
+      p = frag_more (3);
+      p[0] = 0x48 | ((i.rex & REX_B) ? REX_B : 0)
+		  | ((i.rex & REX_R) ? REX_R : 0);
+      p[1] = 0x01;
+      p[2] = 0xc0 | i.rm.regmem | (i.rm.reg << 3);
+      // Clear %rbase from call
+      i.rex &= ~(REX_W | REX_R);
+      if (!i.rex && i.prefix[REX_PREFIX]) {
+        i.prefix[REX_PREFIX] = 0;
+        i.prefixes--;
+      } else {
+        i.prefix[REX_PREFIX] &= ~(REX_W | REX_R);
+      }
+      i.rm.reg = i.tm.extension_opcode;
+      i.operands = 1;
+      i.reg_operands = 1;
+    }
+  }
+}
+
+
+static void
+insert_sandbox_memory_access (void)
+{
+  char *p;
+  if (i.tm.opcode_modifier.isstring)
+    {
+      /* String operations can include two sandbox prefixes */
+      int mem_op = operand_type_check (i.types[0], anymem) ? 0 : 1;
+      if ((i.nacl_truncate[0] && !i.tm.operand_types[mem_op].bitfield.esseg)
+          || (i.nacl_truncate[1] && !i.tm.operand_types[mem_op+1].bitfield.esseg))
+	{
+	  p = frag_more (6);
+	  p[0] = 0x89; // MOV %ESI, %ESI instruction
+	  p[1] = 0xf6;
+	  p[2] = 0x48 | (i.op[2].regs->reg_flags & RegRex); // REX prefix
+	  p[3] = 0x8d; // LEA (%RXX,%RSI),%RSI instruction
+	  p[4] = 0x34;
+	  p[5] = 0x30 | i.op[2].regs->reg_num;
+	}
+      if ((i.nacl_truncate[0] && i.tm.operand_types[mem_op].bitfield.esseg)
+          || (i.nacl_truncate[1] && i.tm.operand_types[mem_op+1].bitfield.esseg))
+	{
+	  p = frag_more (6);
+	  p[0] = 0x89; // MOV %EDI, %EDI instruction
+	  p[1] = 0xff;
+	  p[2] = 0x48 | (i.op[2].regs->reg_flags & RegRex); // REX prefix
+	  p[3] = 0x8d; // LEA (%RXX,%RDI),%RDI instruction
+	  p[4] = 0x3c;
+	  p[5] = 0x38 | i.op[2].regs->reg_num;
+	}
+    }
+  else
+    {
+      /* Normal instruction can only include one sandbox prefix */
+      if (i.nacl_truncate[0])
+	{
+	  if (i.rex & REX_X)
+	    {
+	      p = frag_more (3);
+	      p[0] = 0x45;
+	      p[1] = 0x89; // MOV instruction
+	      p[2] = (0xc0 + i.sib.index + (i.sib.index << 3));
+	    }
+	  else
+	    {
+	      p = frag_more (2);
+	      p[0] = 0x89; // MOV instruction.
+	      p[1] = (0xc0 + i.sib.index + (i.sib.index << 3));
+	    }
+	}
+    }
+}
+
+
+static int imm_size (unsigned int n);
+
+static void
+insert_sp_adjust_sandbox_code (offsetT insn_start_off)
+{
+  char *p = frag_more (2);
+  p[0] = 0x8d; // LEA off(%rbp), %esp
+  if (imm_size(0) == 1)
+    p[1] = 0x65; // Off8
+  else
+    p[1] = 0xa5; // Off32
+  output_imm (frag_now, insn_start_off);
+  // Immediate was already used.
+  i.imm_operands = 0;
+  // Second operand is SP
+  i.rm.regmem = 4;
+}
+
+static void
+insert_xp_sandbox_code(unsigned int regN, unsigned int cmd_2reg,
+		       unsigned int cmd_imm, offsetT insn_start_off,
+		       int gen_imm_prefix)
+{
+  char *p;
+  unsigned int need_rex = !!(i.rex & (REX_B | REX_X));
+  if (i.reg_operands == 2)
+    {
+      p = frag_more (2 + need_rex);
+      if (need_rex)
+	p[0] = 0x44;
+      p[0 + need_rex] = cmd_2reg; // CMD %eXX, %esp
+      p[1 + need_rex] = regN/*ExP*/ << 0 | (i.rm.regmem << 3) | 0xc0;
+      i.prefix[REX_PREFIX] &= ~REX_B;
+      // Second operand is regN(ExP)
+      i.rm.regmem = regN/*ExP*/;
+      // Mode is always reg-to-reg
+      i.rm.mode = 3;
+    }
+  else if (i.imm_operands == 0)
+    {
+      unsigned int need_sib =
+        i.rm.regmem == ESCAPE_TO_TWO_BYTE_ADDRESSING
+        && i.rm.mode != 3
+        && !(i.base_reg && i.base_reg->reg_type.bitfield.reg16);
+      unsigned int need_addr32 = !!i.prefix[ADDR_PREFIX];
+      p = frag_more (2 + need_sib + need_rex + need_addr32);
+      if (need_addr32)
+	{
+	  --i.prefixes;
+	  i.prefix[ADDR_PREFIX] = 0;
+	  p[0] = 0x67;
+	}
+      if (need_rex)
+        p[0 + need_addr32] = i.prefix[REX_PREFIX] & ~(REX_R | REX_W);
+      p[0 + need_addr32 + need_rex] = cmd_2reg | 2; // CMD XXX(XXX,XXX,X),%eYY
+      p[1 + need_addr32 + need_rex] =
+	(i.rm.regmem << 0 | regN/*ExP*/ << 3 | i.rm.mode << 6);
+      if (need_sib)
+        p[2 + need_addr32 + need_rex] =
+	  (i.sib.base << 0 | i.sib.index << 3 | i.sib.scale << 6);
+      if (i.disp_operands)
+        output_disp (frag_now, insn_start_off);
+      // Some bits from REX prefix are already used
+      i.rex &= ~(REX_B | REX_X);
+      i.prefix[REX_PREFIX] &= ~(REX_B | REX_X);
+      // i.prefix[ADDR_PREFIX] was already used
+      i.prefix[ADDR_PREFIX] = 0;
+      // Second operand is regN(ExP)
+      i.rm.regmem = regN/*ExP*/;
+      // Mode is always reg-to-reg
+      i.rm.mode = 3;
+      // We've already used disp
+      i.disp_operands = 0;
+    }
+  else
+    {
+      if (gen_imm_prefix)
+	{
+	  p = frag_more (2);
+	  if (imm_size (0) == 1)
+	    p[0] = 0x83; // CMD imm8, %regN(ExP)
+	  else
+	    p[0] = 0x81; // CMD imm32, %regX(ExP)
+	  p[1] = cmd_imm;
+	}
+      else
+	{
+	  p = frag_more (1);
+	  p[0] = cmd_imm;
+	}
+      output_imm (frag_now, insn_start_off);
+      // Second operand is regN(ExP)
+      i.rm.regmem = regN/*ExP*/;
+      // Mode is always reg-to-reg
+      i.rm.mode = 3;
+      // Immediate was already used
+      i.imm_operands = 0;
+    }
+}
+
+static int
+frag_is_a_call (void)
+{
+  if (i.tm.base_opcode == 0xe8) {
+    // direct calls
+    return 1;
+  }
+  else if (i.tm.base_opcode == 0xff) {
+    // possibly indirect calls
+    return (i.rm.mode == 3) && (i.rm.reg == 2);
+  }
+  else {
+    return 0;
+  }
+}
+
+static void
 output_insn (void)
 {
   fragS *insn_start_frag;
@@ -6214,6 +6573,11 @@ output_insn (void)
 
   insn_start_frag = frag_now;
   insn_start_off = frag_now_fix ();
+
+  if (!strcmp(i.tm.name, "naclcall"))
+    insert_sandbox_jmp ();
+  else if (!strcmp(i.tm.name, "nacljmp"))
+    insert_sandbox_jmp ();
 
   /* Output jumps.  */
   if (i.tm.opcode_modifier.jump)
@@ -6254,10 +6618,10 @@ check_prefix:
 		      if (prefix != REPE_PREFIX_OPCODE
 			  || (i.prefix[REP_PREFIX]
 			      != REPE_PREFIX_OPCODE))
-			add_prefix (prefix);
+			add_prefix (prefix, 1);
 		    }
 		  else
-		    add_prefix (prefix);
+		    add_prefix (prefix, 1);
 		}
 	      break;
 	    case 1:
@@ -6266,6 +6630,44 @@ check_prefix:
 	      abort ();
 	    }
 
+	  /* First output NaCl "prefix" */
+	  insert_sandbox_memory_access ();
+
+	  /* Special instructions */
+	  if (!strcmp(i.tm.name, "naclasp"))
+	    /*                    esp   add   add
+				        reg   imm  */
+	    insert_xp_sandbox_code (4, 0x01, 0xc4, insn_start_off, 1);
+	  else if (!strcmp(i.tm.name, "naclssp"))
+	    /*                    esp   sub   sub
+				        reg   imm  */
+	    insert_xp_sandbox_code (4, 0x29, 0xec, insn_start_off, 1);
+	  else if (!strcmp(i.tm.name, "naclspadj"))
+	    insert_sp_adjust_sandbox_code (insn_start_off);
+	  else if (!strcmp(i.tm.name, "naclrestbp"))
+	    /*                    ebp   mov   mov
+				        reg   imm  */
+	    insert_xp_sandbox_code (5, 0x89, 0xbd, insn_start_off, 0);
+	  else if (!strcmp(i.tm.name, "naclrestsp"))
+	    /*                    esp   mov   mov
+				        reg   imm  */
+	    insert_xp_sandbox_code (4, 0x89, 0xbc, insn_start_off, 0);
+	  else if (!strcmp(i.tm.name, "naclrestsp_noflags")) {
+	    /*                    esp   mov   mov
+				        reg   imm  */
+	    // Generate the mov from src into esp first.
+	    insert_xp_sandbox_code (4, 0x89, 0xbc, insn_start_off, 0);
+	    // Now set it up to restore rsp with lea (%rsp,%r15,1), %rsp --
+	    // overriding the add instruction that insert_xp_sandbox_code
+	    // set up to restore rsp.
+	    i.prefix[REX_PREFIX] = 0x40 | REX_W | REX_X;
+	    i.sib.base = 4;   // %rsp
+	    i.sib.index = 7;  // %r15
+	    i.sib.scale = 0;
+	    i.rm.mode = 0;
+	    i.rm.reg = 4;
+	    // opcode comes from the .tbl file (no need to override)
+	  }
 	  /* The prefix bytes.  */
 	  for (j = ARRAY_SIZE (i.prefix), q = i.prefix; j > 0; j--, q++)
 	    if (*q)
@@ -6353,6 +6755,17 @@ check_prefix:
       pi ("" /*line*/, &i);
     }
 #endif /* DEBUG386  */
+
+  /*
+   * Calls need to fall at the end of a (1 << NACL_ALIGNMENT) region.  We
+   * make sure there are no instructions after the call until the next
+   * alignment.  During writing of the object we swap the nops before the
+   * instruction.
+   */
+  if (frag_is_a_call ()) {
+    frag_now->is_call = 1;
+    frag_align_code (NACL_ALIGNMENT, 0);
+  }
 }
 
 /* Return the size of the displacement operand N.  */
@@ -7538,8 +7951,42 @@ i386_att_operand (char *operand_string)
     }
   else if (*op_string == REGISTER_PREFIX)
     {
-      as_bad (_("bad register name `%s'"), op_string);
-      return 0;
+      if (flag_code == CODE_64BIT && strncmp(op_string, "%nacl", 5) == 0)
+	{
+	  /* Check for a nacl override by searching for ':' after a %nacl */
+	  op_string += 5;
+	  if (is_space_char (*op_string))
+	    ++op_string;
+	  if (*op_string == ':')
+	    {
+	      /* Skip the ':' and whitespace.  */
+	      ++op_string;
+	      if (is_space_char (*op_string))
+		++op_string;
+
+	      i.nacl_truncate[i.mem_operands] = 1;
+
+	      if (!is_digit_char (*op_string)
+		  && !is_identifier_char (*op_string)
+		  && *op_string != '('
+		  && *op_string != ABSOLUTE_PREFIX)
+		{
+		  as_bad (_("bad memory operand `%s'"), op_string);
+		   return 0;
+		}
+	      goto do_memory_reference;
+	    }
+	  if (*op_string)
+	    {
+	      as_bad (_("junk `%s' after register"), op_string);
+	      return 0;
+	    }
+	}
+      else
+	{
+	  as_bad (_("bad register name `%s'"), op_string);
+	  return 0;
+	}
     }
   else if (*op_string == IMMEDIATE_PREFIX)
     {
@@ -8991,6 +9438,16 @@ md_undefined_symbol (char *name)
 valueT
 md_section_align (segT segment ATTRIBUTE_UNUSED, valueT size)
 {
+  if (bfd_get_section_flags (stdoutput, segment) & SEC_CODE)
+    {
+      /* For NaCl, force the code section size to be aligned. This implies
+	 padding with NOPs that is required for validation.  */
+      int align;
+
+      align = bfd_get_section_alignment (stdoutput, segment);
+      size = ((size + (1 << align) - 1) & ((valueT) -1 << align));
+    }
+
 #if (defined (OBJ_AOUT) || defined (OBJ_MAYBE_AOUT))
   if (OUTPUT_FLAVOR == bfd_target_aout_flavour)
     {
