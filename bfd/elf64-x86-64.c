@@ -1119,6 +1119,14 @@ elf_x86_64_check_tls_transition (bfd *abfd,
       if ((rel + 1) >= relend)
 	return FALSE;
 
+      /* Check transition from GD or LD access model.
+	    lea foo@tlsgd/tlsld(%rip), %rdi
+	    nop*      
+	    call __tls_get_addr
+	 can transit to different access model.  */
+
+      /* NACLHACK: we hope for the best and check nothing!  */
+#if 0
       if (r_type == R_X86_64_TLSGD)
 	{
 	  /* Check transition from GD access model.  For 64bit, only
@@ -1196,6 +1204,7 @@ elf_x86_64_check_tls_transition (bfd *abfd,
 	      largepic = TRUE;
 	    }
 	}
+#endif
 
       r_symndx = htab->r_sym (rel[1].r_info);
       if (r_symndx < symtab_hdr->sh_info)
@@ -1214,6 +1223,18 @@ elf_x86_64_check_tls_transition (bfd *abfd,
 			   "__tls_get_addr", 14) == 0));
 
     case R_X86_64_GOTTPOFF:
+      /* NACLHACK:
+	 Check transition from IE access model:
+		movl foo@gottpoff(%rip), %reg
+		addl foo@gottpoff(%rip), %reg
+	 The encoding is similar to x86_64 but with 0x44 REX prefix if writing
+	 to %r9d-%r15d or without REX prefix otherwise. We can't distinguish
+	 cases with/without the prefix, thus disabling the prefix check :-(  */
+
+      if (offset < 2 || (offset + 4) > sec->size)
+	return FALSE;
+#if 0
+      /* NACLHACK: original check disabled.  */
       /* Check transition from IE access model:
 		mov foo@gottpoff(%rip), %reg
 		add foo@gottpoff(%rip), %reg
@@ -1242,6 +1263,7 @@ elf_x86_64_check_tls_transition (bfd *abfd,
       val = bfd_get_8 (abfd, contents + offset - 2);
       if (val != 0x8b && val != 0x03)
 	return FALSE;
+#endif
 
       val = bfd_get_8 (abfd, contents + offset - 1);
       return (val & 0xc7) == 5;
@@ -1410,6 +1432,28 @@ elf_x86_64_tls_transition (struct bfd_link_info *info, bfd *abfd,
   return TRUE;
 }
 
+/* NACLHACK: add reference to __nacl_add_tp (or __nacl_read_tp) symbol.  */
+static struct elf_link_hash_entry *
+nacl_add_tp_symbol (struct bfd_link_info *info, const char* name)
+{
+  struct elf_link_hash_entry *h;
+  struct bfd_link_hash_entry *bh = NULL;
+
+  if (!(_bfd_generic_link_add_one_symbol
+        (info, info->output_bfd, name, BSF_GLOBAL,
+         bfd_und_section_ptr, (bfd_vma) 0, NULL, TRUE,
+         FALSE, &bh)))
+    return NULL;
+
+  h = (struct elf_link_hash_entry *) bh;
+  h->needs_plt = 1;
+  h->plt.refcount += 1;
+  return h;
+}
+
+static struct elf_link_hash_entry *nacl_add_tp_entry = NULL;
+static struct elf_link_hash_entry *nacl_read_tp_entry = NULL;
+
 /* Look through the relocs for a section during the first phase, and
    calculate needed space in the global offset table, procedure
    linkage table, and dynamic reloc sections.  */
@@ -1430,6 +1474,23 @@ elf_x86_64_check_relocs (bfd *abfd, struct bfd_link_info *info,
     return TRUE;
 
   BFD_ASSERT (is_x86_64_elf (abfd));
+
+  if (!nacl_add_tp_entry)
+    {
+      /* NACLHACK: Create symbols for NaCl functions that access thread pointer.
+         Do it in this function so that they exist when reserving GOT/PLT/etc.
+
+         TODO: Here we create symbols unconditionally. We also force creation
+         of PLT entries for them. Instead, allow this function to walk relocs
+         and detect TLS rewrites that are to be made. Create symbols after
+         walking the relocs if they are really needed.  */
+
+      if (!(nacl_add_tp_entry = nacl_add_tp_symbol (info, "__nacl_add_tp")))
+        return FALSE;
+
+      if (!(nacl_read_tp_entry = nacl_add_tp_symbol (info, "__nacl_read_tp")))
+        return FALSE;
+    }
 
   htab = elf_x86_64_hash_table (info);
   if (htab == NULL)
@@ -3217,6 +3278,9 @@ elf_x86_64_relocate_section (bfd *output_bfd,
   Elf_Internal_Rela *relend;
   const unsigned int plt_entry_size = GET_PLT_ENTRY_SIZE (info->output_bfd);
 
+  /* NACLHACK: new variable for NACL rewrites.  */
+  struct elf_link_hash_entry *h_subst = NULL;
+
   BFD_ASSERT (is_x86_64_elf (input_bfd));
 
   htab = elf_x86_64_hash_table (info);
@@ -3294,6 +3358,27 @@ elf_x86_64_relocate_section (bfd *output_bfd,
 	      h->root.u.def.value = sym->st_value;
 	      h->root.u.def.section = sec;
 	    }
+	}
+      else if (h_subst)
+	{
+	  /* NACLHACK: Replace symbol to relocate.
+
+	     This is somewhat hacky, as relies on not using r_symndx any more,
+	     which is currently true for R_X86_64_PLT32 involved in NaCl TLS
+	     code sequences.
+
+	     Doing this in a more reliable way means either splitting this
+	     glorious function or copy-pasting code that processes relocations
+	     of interest. Any volunteers?  */
+
+	  bfd_boolean warned;
+
+	  h = h_subst;
+	  h_subst = NULL;
+
+	  RELOC_FOR_GLOBAL_SYM_HASH (info, input_bfd, input_section, rel,
+				     h, sec, relocation,
+				     unresolved_reloc, warned);
 	}
       else
 	{
@@ -3916,10 +4001,16 @@ direct:
 			  sindx = elf_section_data (osec)->dynindx;
 			  if (sindx == 0)
 			    {
-			      asection *oi = htab->elf.text_index_section;
-			      sindx = elf_section_data (oi)->dynindx;
+			      osec = htab->elf.text_index_section;
+			      sindx = elf_section_data (osec)->dynindx;
 			    }
 			  BFD_ASSERT (sindx != 0);
+			  /* NACLHACK: For NaCl, R_X86_64_32 comes in place of
+			     R_X86_64_64. We don't have R_X86_32_RELATIVE to
+			     make a rewrite similar to one above, so just make
+			     a non-buggy relocation against section symbol.  */
+			  if (r_type == R_X86_64_32)
+			    relocation -= osec->vma;
 			}
 
 		      outrel.r_info = htab->r_info (sindx, r_type);
@@ -3972,6 +4063,19 @@ direct:
 
 	      if (ELF32_R_TYPE (rel->r_info) == R_X86_64_TLSGD)
 		{
+		  /* NACLHACK: use __nacl_add_tp instead of __tls_get_addr.  */
+		  /* Rewrite lea to mov.  */
+		  bfd_put_8 (output_bfd, 0x66, contents + roff - 3);
+		  bfd_put_8 (output_bfd, 0x90, contents + roff - 2);
+		  bfd_put_8 (output_bfd, 0xbf, contents + roff - 1);
+		  bfd_put_32 (output_bfd,
+		              elf_x86_64_tpoff (info, relocation),
+		              contents + roff);
+
+		  /* Call __nacl_add_tp instead of __tls_get_addr.  */
+		  h_subst = nacl_add_tp_entry;
+#if 0
+		  /* NACLHACK: Original GD->LE transition disabled.  */
 		  /* GD->LE transition.  For 64bit, change
 		     .byte 0x66; leaq foo@tlsgd(%rip), %rdi
 		     .word 0x6666; rex64; call __tls_get_addr
@@ -4015,6 +4119,7 @@ direct:
 			      contents + roff + 8 + largepic);
 		  /* Skip R_X86_64_PC32/R_X86_64_PLT32/R_X86_64_PLTOFF64.  */
 		  rel++;
+#endif
 		  continue;
 		}
 	      else if (ELF32_R_TYPE (rel->r_info) == R_X86_64_GOTPC32_TLSDESC)
@@ -4237,6 +4342,25 @@ direct:
 
 	      if (ELF32_R_TYPE (rel->r_info) == R_X86_64_TLSGD)
 		{
+		  /* NACLHACK: use __nacl_add_tp instead of __tls_get_addr.  */
+		  /* Rewrite lea to mov.  */
+		  bfd_put_8 (output_bfd, 0x90, contents + roff - 3);
+		  bfd_put_8 (output_bfd, 0x8b, contents + roff - 2);
+		  bfd_put_8 (output_bfd, 0x3d, contents + roff - 1);
+
+		  relocation = (htab->elf.sgot->output_section->vma
+		                + htab->elf.sgot->output_offset + off
+		                - roff
+		                - input_section->output_section->vma
+		                - input_section->output_offset
+		                - 4);
+		  bfd_put_32 (output_bfd, relocation,
+		              contents + roff);
+
+		  /* Call __nacl_add_tp instead of __tls_get_addr.  */
+		  h_subst = nacl_add_tp_entry;
+#if 0
+		  /* NACLHACK: Original GD->LE transition disabled.  */
 		  /* GD->IE transition.  For 64bit, change
 		     .byte 0x66; leaq foo@tlsgd(%rip), %rdi
 		     .word 0x6666; rex64; call __tls_get_addr@plt
@@ -4287,6 +4411,7 @@ direct:
 			      contents + roff + 8 + largepic);
 		  /* Skip R_X86_64_PLT32/R_X86_64_PLTOFF64.  */
 		  rel++;
+#endif
 		  continue;
 		}
 	      else if (ELF32_R_TYPE (rel->r_info) == R_X86_64_GOTPC32_TLSDESC)
@@ -4342,6 +4467,15 @@ direct:
 
 	  if (r_type != R_X86_64_TLSLD)
 	    {
+	      /*  NACLHACK: use __nacl_add_tp instead of __tls_get_addr.  */
+	      /* Rewrite lea to nop.  */
+	      memcpy (contents + rel->r_offset - 3,
+		      "\x0f\x1f\x80\x00\x00\x00\x00", 7);
+
+	      /* Call __nacl_read_tp instead of __tls_get_addr.  */
+	      h_subst = nacl_read_tp_entry;
+#if 0
+	      /* NACLHACK: Original LD->LE transition disabled.  */
 	      /* LD->LE transition:
 		 leaq foo@tlsld(%rip), %rdi; call __tls_get_addr.
 		 For 64bit, we change it into:
@@ -4371,6 +4505,7 @@ direct:
 			"\x0f\x1f\x40\x00\x64\x8b\x04\x25\0\0\0", 12);
 	      /* Skip R_X86_64_PC32/R_X86_64_PLT32/R_X86_64_PLTOFF64.  */
 	      rel++;
+#endif
 	      continue;
 	    }
 
