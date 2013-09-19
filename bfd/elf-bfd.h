@@ -2362,19 +2362,11 @@ extern asection _bfd_elf_large_com_section;
 
 /* This macro is to avoid lots of duplicated code in the body
    of xxx_relocate_section() in the various elfxx-xxxx.c files.  */
-#define RELOC_FOR_GLOBAL_SYMBOL(info, input_bfd, input_section, rel,	\
-				r_symndx, symtab_hdr, sym_hashes,	\
-				h, sec, relocation,			\
-				unresolved_reloc, warned)		\
+#define RELOC_FOR_GLOBAL_SYM_HASH(info, input_bfd, input_section, rel,	\
+				  h, sec, relocation,			\
+				  unresolved_reloc, warned)		\
   do									\
     {									\
-      /* It seems this can happen with erroneous or unsupported		\
-	 input (mixing a.out and elf in an archive, for example.)  */	\
-      if (sym_hashes == NULL)						\
-	return FALSE;							\
-									\
-      h = sym_hashes[r_symndx - symtab_hdr->sh_info];			\
-									\
       while (h->root.type == bfd_link_hash_indirect			\
 	     || h->root.type == bfd_link_hash_warning)			\
 	h = (struct elf_link_hash_entry *) h->root.u.i.link;		\
@@ -2471,6 +2463,25 @@ extern asection _bfd_elf_large_com_section;
     rel += count - 1;							\
     continue;								\
   }
+
+#define RELOC_FOR_GLOBAL_SYMBOL(info, input_bfd, input_section, rel,	\
+				r_symndx, symtab_hdr, sym_hashes,	\
+				h, sec, relocation,			\
+				unresolved_reloc, warned)		\
+  do									\
+    {									\
+      /* It seems this can happen with erroneous or unsupported		\
+	 input (mixing a.out and elf in an archive, for example.)  */	\
+      if (sym_hashes == NULL)						\
+	return FALSE;							\
+									\
+      h = sym_hashes[r_symndx - symtab_hdr->sh_info];			\
+									\
+      RELOC_FOR_GLOBAL_SYM_HASH(info, input_bfd, input_section, rel,	\
+				h, sec, relocation,			\
+				unresolved_reloc, warned);		\
+    }									\
+  while (0)
 
 /* Will a symbol be bound to the the definition within the shared
    library, if any.  A unique symbol can never be bound locally.  */
