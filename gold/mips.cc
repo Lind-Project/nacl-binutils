@@ -7085,6 +7085,15 @@ Target_mips<size, big_endian>::do_finalize_sections(Layout* layout,
       odyn->add_section_address(elfcpp::DT_MIPS_PLTGOT, this->got_plt_);
   }
 
+  // @LOCALMOD-BEGIN
+  // Ensure that the size of the text section is a multiple of bundle size,
+  // otherwise NaClTextDyncodeCreate will reject it in case it is not.
+  const int kInstructionBundleSize = 16;
+  Output_section *text = layout->find_output_section(".text");
+  text->set_current_data_size(align_address(text->current_data_size(),
+                                            kInstructionBundleSize));
+  // @LOCALMOD-END
+
   Target::do_finalize_sections (layout, input_objects, symtab);
  }
 
