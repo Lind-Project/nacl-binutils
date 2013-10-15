@@ -6353,20 +6353,12 @@ insert_sandbox_jmp (void)
       p[0] = 0x40 | (i.rex & REX_B);
       p[1] = 0x83; // AND instruction
       p[2] = (0xe0 + i.rm.regmem); // mod = 11, reg = 100,  rm = i.rm.regmem
-#ifdef TC_NACL_C
       p[3] = 0xff & ~align_mask;
-#else
-      p[3] = 0xff;
-#endif
     } else {
       p = frag_more (3);
       p[0] = 0x83; // AND instruction.
       p[1] = (0xe0 + i.rm.regmem); // mod = 11, reg = 100,  rm = i.rm.regmem
-#ifdef TC_NACL_C
       p[2] = 0xff & ~align_mask;
-#else
-      p[2] = 0xff;
-#endif
     }
     if (i.operands == 2) {
       p = frag_more (3);
