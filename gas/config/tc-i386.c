@@ -6563,6 +6563,20 @@ output_insn (void)
      frag may have been closed off.  eg. by frag_var.  */
   dwarf2_emit_insn (0);
 
+  /* Preemptively ensure that the fill space required to align a call to the
+     end of a frag is available in the current frag.
+     Calls are aligned to the end of a bundle for nacl.  This is done by
+     emitting an align_code frag after the current frag, which will close
+     the current frag.  Before closing the current frag frag_align_code
+     attempts to grow the current frag with enough bytes to pad to the
+     alignment boundary.  If growing the current frag succeeds, then in write.c
+     we shift the call instruction down to the end of the current frag.
+     However, it is possible that the current fragment is close enough to the
+     end of an obstack chunk that one cannot grow the current frag.  In this
+     case frag_grow will generate a new frag to hold the padding.  This does
+     not leave the space in the call frag that we need to move the call down. */
+  frag_grow (1 << (NACL_ALIGNMENT + 1));
+
   insn_start_frag = frag_now;
   insn_start_off = frag_now_fix ();
 
