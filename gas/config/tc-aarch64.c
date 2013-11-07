@@ -3277,7 +3277,7 @@ parse_sys_reg (char **str, struct hash_control *sys_regs, int imple_defined_p)
 {
   char *p, *q;
   char buf[32];
-  const struct aarch64_name_value_pair *o;
+  const aarch64_sys_reg *o;
   int value;
 
   p = buf;
@@ -3313,7 +3313,12 @@ parse_sys_reg (char **str, struct hash_control *sys_regs, int imple_defined_p)
 	}
     }
   else
-    value = o->value;
+    {
+      if (aarch64_sys_reg_deprecated_p (o))
+	as_warn (_("system register name '%s' is deprecated and may be "
+"removed in a future release"), buf);
+      value = o->value;
+    }
 
   *str = q;
   return value;
@@ -4810,7 +4815,8 @@ parse_operands (char *str, const aarch64_opcode *opcode)
 	case AARCH64_OPND_IMM_MOV:
 	  {
 	    char *saved = str;
-	    if (reg_name_p (str, REG_TYPE_R_Z_SP))
+	    if (reg_name_p (str, REG_TYPE_R_Z_SP) ||
+		reg_name_p (str, REG_TYPE_VN))
 	      goto failure;
 	    str = saved;
 	    po_misc_or_fail (my_get_expression (&inst.reloc.exp, &str,
@@ -4968,11 +4974,19 @@ parse_operands (char *str, const aarch64_opcode *opcode)
 	  break;
 
 	case AARCH64_OPND_COND:
+	case AARCH64_OPND_COND1:
 	  info->cond = hash_find_n (aarch64_cond_hsh, str, 2);
 	  str += 2;
 	  if (info->cond == NULL)
 	    {
 	      set_syntax_error (_("invalid condition"));
+	      goto failure;
+	    }
+	  else if (operands[i] == AARCH64_OPND_COND1
+		   && (info->cond->value & 0xe) == 0xe)
+	    {
+	      /* Not allow AL or NV.  */
+	      set_default_error ();
 	      goto failure;
 	    }
 	  break;
