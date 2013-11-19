@@ -1,3 +1,30 @@
+2013-11-19  Roland McGrath  <mcgrathr@google.com>
+	    Alan Modra  <amodra@gmail.com>
+
+	* emultempl/elf32.em (gld${EMULATION_NAME}_before_allocation):
+	Don't use bfd_elf_record_link_assignment to mark __ehdr_start
+	hidden.  Instead, just do it directly here, and only if it was
+	referenced but not defined.
+
+2013-11-18  Chung-Lin Tang  <cltang@codesourcery.com>
+
+	Backport from master
+	2013-11-18  Chung-Lin Tang  <cltang@codesourcery.com>
+	* emulparams/nios2linux.sh: New emulation file.
+	* configure.tgt: Add nios2*-*-linux* emulation case.
+	* Makefile.am (enios2elf.c): Change tdir_nios2 to tdir_nios2elf.
+	(enios2linux.c): New emulation entry.
+	* Makefile.in: Regenerate.
+
+2013-11-15  Alan Modra  <amodra@gmail.com>
+
+	Apply mainline changes to 2.24
+	2013-09-24  Alan Modra  <amodra@gmail.com>
+	* emulparams/elf32ppccommon.sh (LIBPATH_SUFFIX): Provide 32-bit
+	and cross-endian values.
+	* emulparams/elf64ppc.sh: Source elf32ppccomon.sh.  Delete duplicate,
+	and unset unwanted variables.
+
 2013-10-10  Roland McGrath  <mcgrathr@google.com>
 
 	* ldmisc.c (vfinfo): Use Boolean ? "" : ":" in place of ":" + Boolean.

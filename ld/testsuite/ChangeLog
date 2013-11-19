@@ -1,3 +1,66 @@
+2013-11-19  Roland McGrath  <mcgrathr@google.com>
+
+	* ld-elf/ehdr_start-userdef.t: New file.
+	* ld-elf/ehdr_start-userdef.d: New file.
+	* ld-elf/ehdr_start-strongref.s: New file.
+	* ld-elf/ehdr_start-missing.t: New file.
+	* ld-elf/ehdr_start-missing.d: New file.
+	* ld-elf/ehdr_start-weak.d: New file.
+	* ld-mips-elf/ehdr_start-2.nd: Expect __ehdr_start to be global.
+
+2013-11-17  H.J. Lu  <hongjiu.lu@intel.com>
+
+	* ld-x86-64/mpx.exp: New file.
+	* ld-x86-64/mpx1.out: Likewise.
+	* ld-x86-64/mpx1a.c: Likewise.
+	* ld-x86-64/mpx1a.rd: Likewise.
+	* ld-x86-64/mpx1b.c: Likewise.
+	* ld-x86-64/mpx1c.c: Likewise.
+	* ld-x86-64/mpx1c.rd: Likewise.
+
+2013-11-15  Alan Modra  <amodra@gmail.com>
+
+	Apply changes from mainline to 2.24
+	2013-11-04  Alan Modra  <amodra@gmail.com>
+	* ld-powerpc/elfv2exe.d: Adjust for non-PIC global entry.
+
+	2013-11-04  Alan Modra  <amodra@gmail.com>
+	* ld-elfvers/vers24.rd: Allow extra readelf output after
+	symbol visibility.
+	* ld-ifunc/ifunc.exp: Likewise.
+
+	2013-11-04  Alan Modra  <amodra@gmail.com>
+	* ld-scripts/crossref.exp: Don't allow changes made to CFLAGS
+	for this test to bleed into following tests.  Don't set
+	-mcall-aixdesc for powerpc64le.
+
+	2013-10-30  Alan Modra  <amodra@gmail.com>
+	* ld-powerpc/elfv2.s,
+	* ld-powerpc/elfv2so.d,
+	* ld-powerpc/elfv2exe.d: New tests.
+	* ld-powerpc/powerpc.exp: Run them.
+
+	2013-10-30  Alan Modra  <amodra@gmail.com>
+	* ld-powerpc/tls.s: Add proper .opd entry for _start.
+	* ld-powerpc/tlstoc.s: Likewise.
+	* ld-powerpc/relbrlt.d: Update for changed stubs.
+	* ld-powerpc/tls.d: Update for changed stubs and _start .opd entry.
+	* ld-powerpc/tls.g: Likewise.
+	* ld-powerpc/tlsexe.d: Likewise.
+	* ld-powerpc/tlsexe.g: Likewise.
+	* ld-powerpc/tlsexe.r: Likewise.
+	* ld-powerpc/tlsexetoc.d: Likewise.
+	* ld-powerpc/tlsexetoc.g: Likewise.
+	* ld-powerpc/tlsexetoc.r: Likewise.
+	* ld-powerpc/tlsso.d: Likewise.
+	* ld-powerpc/tlsso.g: Likewise.
+	* ld-powerpc/tlsso.r: Likewise.
+	* ld-powerpc/tlstoc.d: Likewise.
+	* ld-powerpc/tlstoc.g: Likewise.
+	* ld-powerpc/tlstocso.d: Likewise.
+	* ld-powerpc/tlstocso.g: Likewise.
+	* ld-powerpc/tlstocso.r: Likewise.
+
 2013-11-07  Roland McGrath  <mcgrathr@google.com>
 
 	* ld-x86-64/x86-64.exp (mixed1, mixed2): Loosen error string match
