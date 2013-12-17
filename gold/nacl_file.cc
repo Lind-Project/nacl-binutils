@@ -28,10 +28,11 @@
 #endif
 
 #include <argz.h>
+#include <fcntl.h>
 #include <map>
 #include <string>
+#include <unistd.h>
 #include <vector>
-#include <fcntl.h>
 
 #include "native_client/src/public/imc_syscalls.h"
 #include "native_client/src/public/name_service.h"
