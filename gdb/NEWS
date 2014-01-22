@@ -3,6 +3,8 @@
 
 *** Changes since GDB 7.6
 
+* GDB now supports SystemTap SDT probes on AArch64 GNU/Linux.
+
 * GDB now supports Fission DWP file format version 2.
   http://gcc.gnu.org/wiki/DebugFission
 
@@ -40,6 +42,9 @@
   ** Frame filters and frame decorators have been added.
   ** Temporary breakpoints are now supported.
   ** Line tables representation has been added.
+  ** New attribute 'parent_type' for gdb.Field objects.
+  ** gdb.Field objects can be used as subscripts on gdb.Value objects.
+  ** New attribute 'name' for gdb.Type objects.
 
 * New targets
 

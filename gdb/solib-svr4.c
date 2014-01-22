@@ -1,6 +1,6 @@
 /* Handle SVR4 shared libraries for GDB, the GNU Debugger.
 
-   Copyright (C) 1990-2013 Free Software Foundation, Inc.
+   Copyright (C) 1990-2014 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -1661,6 +1661,7 @@ solib_event_probe_action (struct probe_and_action *pa)
 {
   enum probe_action action;
   unsigned probe_argc;
+  struct frame_info *frame = get_current_frame ();
 
   action = pa->action;
   if (action == DO_NOTHING || action == PROBES_INTERFACE_FAILED)
@@ -1673,7 +1674,7 @@ solib_event_probe_action (struct probe_and_action *pa)
        arg0: Lmid_t lmid (mandatory)
        arg1: struct r_debug *debug_base (mandatory)
        arg2: struct link_map *new (optional, for incremental updates)  */
-  probe_argc = get_probe_argument_count (pa->probe);
+  probe_argc = get_probe_argument_count (pa->probe, frame);
   if (probe_argc == 2)
     action = FULL_RELOAD;
   else if (probe_argc < 2)
@@ -1782,6 +1783,7 @@ svr4_handle_solib_event (void)
   struct value *val;
   CORE_ADDR pc, debug_base, lm = 0;
   int is_initial_ns;
+  struct frame_info *frame = get_current_frame ();
 
   /* Do nothing if not using the probes interface.  */
   if (info->probes_table == NULL)
@@ -1826,7 +1828,7 @@ svr4_handle_solib_event (void)
   usm_chain = make_cleanup (resume_section_map_updates_cleanup,
 			    current_program_space);
 
-  val = evaluate_probe_argument (pa->probe, 1);
+  val = evaluate_probe_argument (pa->probe, 1, frame);
   if (val == NULL)
     {
       do_cleanups (old_chain);
@@ -1857,7 +1859,7 @@ svr4_handle_solib_event (void)
 
   if (action == UPDATE_OR_RELOAD)
     {
-      val = evaluate_probe_argument (pa->probe, 2);
+      val = evaluate_probe_argument (pa->probe, 2, frame);
       if (val != NULL)
 	lm = value_as_address (val);
 

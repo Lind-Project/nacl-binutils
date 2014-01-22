@@ -1,6 +1,6 @@
 /* Everything about breakpoints, for GDB.
 
-   Copyright (C) 1986-2013 Free Software Foundation, Inc.
+   Copyright (C) 1986-2014 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -66,7 +66,6 @@
 #include "continuations.h"
 #include "stack.h"
 #include "skip.h"
-#include "gdb_regex.h"
 #include "ax-gdb.h"
 #include "dummy-frame.h"
 
@@ -2396,7 +2395,7 @@ insert_bp_location (struct bp_location *bl,
 		    int *hw_bp_error_explained_already)
 {
   int val = 0;
-  char *hw_bp_err_string = NULL;
+  const char *hw_bp_err_string = NULL;
   struct gdb_exception e;
 
   if (!should_be_inserted (bl) || (bl->inserted && !bl->needs_update))
@@ -2501,7 +2500,7 @@ insert_bp_location (struct bp_location *bl,
 	  if (e.reason < 0)
 	    {
 	      val = 1;
-	      hw_bp_err_string = (char *) e.message;
+	      hw_bp_err_string = e.message;
 	    }
 	}
       else
@@ -2543,7 +2542,7 @@ insert_bp_location (struct bp_location *bl,
 	      if (e.reason < 0)
 	        {
 	          val = 1;
-	          hw_bp_err_string = (char *) e.message;
+	          hw_bp_err_string = e.message;
 	        }
 	    }
 	  else
@@ -8325,10 +8324,9 @@ breakpoint_hit_catch_syscall (const struct bp_location *bl,
            VEC_iterate (int, c->syscalls_to_be_caught, i, iter);
            i++)
 	if (syscall_number == iter)
-	  break;
-      /* Not the same.  */
-      if (!iter)
-	return 0;
+	  return 1;
+
+      return 0;
     }
 
   return 1;

@@ -1,6 +1,6 @@
 /* Cache and manage frames for GDB, the GNU debugger.
 
-   Copyright (C) 1986-2013 Free Software Foundation, Inc.
+   Copyright (C) 1986-2014 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -116,21 +116,21 @@ struct frame_info
     enum cached_copy_status status;
     CORE_ADDR value;
   } prev_pc;
-  
+
   /* Cached copy of the previous frame's function address.  */
   struct
   {
     CORE_ADDR addr;
     int p;
   } prev_func;
-  
+
   /* This frame's ID.  */
   struct
   {
     int p;
     struct frame_id value;
   } this_id;
-  
+
   /* The frame's high-level base methods, and corresponding cache.
      The high level base methods are selected based on the frame's
      debug info.  */
@@ -166,10 +166,11 @@ frame_addr_hash (const void *ap)
   const struct frame_id f_id = frame->this_id.value;
   hashval_t hash = 0;
 
-  gdb_assert (f_id.stack_addr_p || f_id.code_addr_p
+  gdb_assert (f_id.stack_status != FID_STACK_INVALID
+	      || f_id.code_addr_p
 	      || f_id.special_addr_p);
 
-  if (f_id.stack_addr_p)
+  if (f_id.stack_status == FID_STACK_VALID)
     hash = iterative_hash (&f_id.stack_addr,
 			   sizeof (f_id.stack_addr), hash);
   if (f_id.code_addr_p)
@@ -317,13 +318,23 @@ void
 fprint_frame_id (struct ui_file *file, struct frame_id id)
 {
   fprintf_unfiltered (file, "{");
-  fprint_field (file, "stack", id.stack_addr_p, id.stack_addr);
+
+  if (id.stack_status == FID_STACK_INVALID)
+    fprintf_unfiltered (file, "!stack");
+  else if (id.stack_status == FID_STACK_UNAVAILABLE)
+    fprintf_unfiltered (file, "stack=<unavailable>");
+  else
+    fprintf_unfiltered (file, "stack=%s", hex_string (id.stack_addr));
   fprintf_unfiltered (file, ",");
+
   fprint_field (file, "code", id.code_addr_p, id.code_addr);
   fprintf_unfiltered (file, ",");
+
   fprint_field (file, "special", id.special_addr_p, id.special_addr);
+
   if (id.artificial_depth)
     fprintf_unfiltered (file, ",artificial=%d", id.artificial_depth);
+
   fprintf_unfiltered (file, "}");
 }
 
@@ -487,7 +498,7 @@ frame_unwind_caller_id (struct frame_info *next_frame)
 }
 
 const struct frame_id null_frame_id; /* All zeros.  */
-const struct frame_id outer_frame_id = { 0, 0, 0, 0, 0, 1, 0 };
+const struct frame_id outer_frame_id = { 0, 0, 0, FID_STACK_INVALID, 0, 1, 0 };
 
 struct frame_id
 frame_id_build_special (CORE_ADDR stack_addr, CORE_ADDR code_addr,
@@ -496,11 +507,24 @@ frame_id_build_special (CORE_ADDR stack_addr, CORE_ADDR code_addr,
   struct frame_id id = null_frame_id;
 
   id.stack_addr = stack_addr;
-  id.stack_addr_p = 1;
+  id.stack_status = FID_STACK_VALID;
   id.code_addr = code_addr;
   id.code_addr_p = 1;
   id.special_addr = special_addr;
   id.special_addr_p = 1;
+  return id;
+}
+
+/* See frame.h.  */
+
+struct frame_id
+frame_id_build_unavailable_stack (CORE_ADDR code_addr)
+{
+  struct frame_id id = null_frame_id;
+
+  id.stack_status = FID_STACK_UNAVAILABLE;
+  id.code_addr = code_addr;
+  id.code_addr_p = 1;
   return id;
 }
 
@@ -510,7 +534,7 @@ frame_id_build (CORE_ADDR stack_addr, CORE_ADDR code_addr)
   struct frame_id id = null_frame_id;
 
   id.stack_addr = stack_addr;
-  id.stack_addr_p = 1;
+  id.stack_status = FID_STACK_VALID;
   id.code_addr = code_addr;
   id.code_addr_p = 1;
   return id;
@@ -522,7 +546,7 @@ frame_id_build_wild (CORE_ADDR stack_addr)
   struct frame_id id = null_frame_id;
 
   id.stack_addr = stack_addr;
-  id.stack_addr_p = 1;
+  id.stack_status = FID_STACK_VALID;
   return id;
 }
 
@@ -532,7 +556,7 @@ frame_id_p (struct frame_id l)
   int p;
 
   /* The frame is valid iff it has a valid stack address.  */
-  p = l.stack_addr_p;
+  p = l.stack_status != FID_STACK_INVALID;
   /* outer_frame_id is also valid.  */
   if (!p && memcmp (&l, &outer_frame_id, sizeof (l)) == 0)
     p = 1;
@@ -560,24 +584,26 @@ frame_id_eq (struct frame_id l, struct frame_id r)
   int eq;
   const uint32_t max_addr = (uint32_t) -1;
 
-  if (!l.stack_addr_p && l.special_addr_p
-      && !r.stack_addr_p && r.special_addr_p)
+  if (l.stack_status == FID_STACK_INVALID && l.special_addr_p
+      && r.stack_status == FID_STACK_INVALID && r.special_addr_p)
     /* The outermost frame marker is equal to itself.  This is the
        dodgy thing about outer_frame_id, since between execution steps
        we might step into another function - from which we can't
        unwind either.  More thought required to get rid of
        outer_frame_id.  */
     eq = 1;
-  else if (!l.stack_addr_p || !r.stack_addr_p)
+  else if (l.stack_status == FID_STACK_INVALID
+	   || l.stack_status == FID_STACK_INVALID)
     /* Like a NaN, if either ID is invalid, the result is false.
        Note that a frame ID is invalid iff it is the null frame ID.  */
     eq = 0;
     /* Hack for PNaCl support.  Due to base address hiding
        stack_addr may differ by base address.  This creates false
        positives for normal 64-bit mode, so we need to find a better way.  */
-  else if ((l.stack_addr != r.stack_addr && l.stack_addr > max_addr
-	   && r.stack_addr > max_addr)
-	   || (uint32_t)l.stack_addr != (uint32_t)r.stack_addr)
+  else if (l.stack_status != r.stack_status
+           || (l.stack_addr != r.stack_addr
+               && l.stack_addr > max_addr && r.stack_addr > max_addr)
+	   || (uint32_t) l.stack_addr != (uint32_t) r.stack_addr)
     /* If .stack addresses are different, the frames are different.  */
     eq = 0;
   else if (l.code_addr_p && r.code_addr_p && l.code_addr != r.code_addr)
@@ -644,8 +670,9 @@ frame_id_inner (struct gdbarch *gdbarch, struct frame_id l, struct frame_id r)
 {
   int inner;
 
-  if (!l.stack_addr_p || !r.stack_addr_p)
-    /* Like NaN, any operation involving an invalid ID always fails.  */
+  if (l.stack_status != FID_STACK_VALID || r.stack_status != FID_STACK_VALID)
+    /* Like NaN, any operation involving an invalid ID always fails.
+       Likewise if either ID has an unavailable stack address.  */
     inner = 0;
   else if (l.artificial_depth > r.artificial_depth
 	   && l.stack_addr == r.stack_addr
@@ -751,7 +778,7 @@ frame_unwind_pc (struct frame_info *this_frame)
 	     determine the value of registers in THIS frame, and hence
 	     the value of this frame's PC (resume address).  A typical
 	     implementation is no more than:
-	   
+
 	     frame_unwind_register (this_frame, ISA_PC_REGNUM, buf);
 	     return extract_unsigned_integer (buf, size of ISA_PC_REGNUM);
 
@@ -1820,7 +1847,7 @@ get_prev_frame_1 (struct frame_info *this_frame)
       CORE_ADDR this_pc_in_block;
       struct minimal_symbol *morestack_msym;
       const char *morestack_name = NULL;
-      
+
       /* gcc -fsplit-stack __morestack can continue the stack anywhere.  */
       this_pc_in_block = get_frame_address_in_block (this_frame);
       morestack_msym = lookup_minimal_symbol_by_pc (this_pc_in_block).minsym;
@@ -2027,9 +2054,9 @@ get_prev_frame (struct frame_info *this_frame)
      pcsqh register (space register for the instruction at the head of the
      instruction queue) cannot be written directly; the only way to set it
      is to branch to code that is in the target space.  In order to implement
-     frame dummies on HPUX, the called function is made to jump back to where 
-     the inferior was when the user function was called.  If gdb was inside 
-     the main function when we created the dummy frame, the dummy frame will 
+     frame dummies on HPUX, the called function is made to jump back to where
+     the inferior was when the user function was called.  If gdb was inside
+     the main function when we created the dummy frame, the dummy frame will
      point inside the main function.  */
   if (this_frame->level >= 0
       && get_frame_type (this_frame) == NORMAL_FRAME
@@ -2074,7 +2101,7 @@ get_prev_frame (struct frame_info *this_frame)
      That should provide a far better stopper than the current
      heuristics.  */
   /* NOTE: tausq/2004-10-09: this is needed if, for example, the compiler
-     applied tail-call optimizations to main so that a function called 
+     applied tail-call optimizations to main so that a function called
      from main returns directly to the caller of main.  Since we don't
      stop at main, we should at least stop at the entry point of the
      application.  */

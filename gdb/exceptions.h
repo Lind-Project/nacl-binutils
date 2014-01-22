@@ -1,6 +1,6 @@
 /* Exception (throw catch) mechanism, for GDB, the GNU debugger.
 
-   Copyright (C) 1986-2013 Free Software Foundation, Inc.
+   Copyright (C) 1986-2014 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -78,9 +78,6 @@ enum errors {
 
   /* Error accessing memory.  */
   MEMORY_ERROR,
-
-  /* Feature is not supported in this copy of GDB.  */
-  UNSUPPORTED_ERROR,
 
   /* Value not available.  E.g., a register was not collected in a
      traceframe.  */

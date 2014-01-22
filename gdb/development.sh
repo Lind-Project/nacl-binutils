@@ -1,4 +1,4 @@
-# Copyright (C) 2012-2013 Free Software Foundation, Inc.
+# Copyright (C) 2012-2014 Free Software Foundation, Inc.
 #
 # This file is part of GDB.
 #
@@ -18,4 +18,4 @@
 # Set to 'true' for development snapshots, 'false' for releases and
 # pre-releases.  When true, provide more thorough testing with
 # -lmcheck.
-development=true
+development=false

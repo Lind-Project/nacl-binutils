@@ -1,4 +1,4 @@
-/* Copyright (C) 2013 Free Software Foundation, Inc.
+/* Copyright (C) 2013-2014 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -723,6 +723,13 @@ solib_aix_bfd_open (char *pathname)
       do_cleanups (cleanup);
       return NULL;
     }
+
+  /* Override the returned bfd's name with our synthetic name in order
+     to allow commands listing all shared libraries to display that
+     synthetic name.  Otherwise, we would only be displaying the name
+     of the archive member object.  */
+  xfree (bfd_get_filename (object_bfd));
+  object_bfd->filename = xstrdup (pathname);
 
   gdb_bfd_unref (archive_bfd);
   do_cleanups (cleanup);

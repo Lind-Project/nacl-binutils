@@ -1,6 +1,6 @@
 /* Handle Darwin shared libraries for GDB, the GNU Debugger.
 
-   Copyright (C) 2009-2013 Free Software Foundation, Inc.
+   Copyright (C) 2009-2014 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -617,6 +617,12 @@ darwin_bfd_open (char *pathname)
       error (_("`%s': not a shared-library: %s"),
 	     bfd_get_filename (abfd), bfd_errmsg (bfd_get_error ()));
     }
+
+  /* The current filename for fat-binary BFDs is a name generated
+     by BFD, usually a string containing the name of the architecture.
+     Reset its value to the actual filename.  */
+  xfree (bfd_get_filename (res));
+  res->filename = xstrdup (pathname);
 
   gdb_bfd_unref (abfd);
   return res;
