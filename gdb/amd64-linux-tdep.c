@@ -1535,6 +1535,14 @@ amd64_linux_init_abi_common(struct gdbarch_info info, struct gdbarch *gdbarch)
   tdep->i386_syscall_record = amd64_linux_syscall_record;
 }
 
+void
+amd64_linux_init_gregset (struct gdbarch_tdep *tdep)
+{
+  tdep->gregset_reg_offset = amd64_linux_gregset_reg_offset;
+  tdep->gregset_num_regs = ARRAY_SIZE (amd64_linux_gregset_reg_offset);
+  tdep->sizeof_gregset = 27 * 8;
+}
+
 static void
 amd64_linux_init_abi (struct gdbarch_info info, struct gdbarch *gdbarch)
 {
@@ -1546,10 +1554,7 @@ amd64_linux_init_abi (struct gdbarch_info info, struct gdbarch *gdbarch)
 
   gdb_assert (tdesc_data);
 
-  tdep->gregset_reg_offset = amd64_linux_gregset_reg_offset;
-  tdep->gregset_num_regs = ARRAY_SIZE (amd64_linux_gregset_reg_offset);
-  tdep->sizeof_gregset = 27 * 8;
-
+  amd64_linux_init_gregset (tdep);
   amd64_init_abi (info, gdbarch);
 
   /* Reserve a number for orig_rax.  */

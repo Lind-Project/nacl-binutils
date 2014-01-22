@@ -51,6 +51,8 @@
 static struct link_map_offsets *svr4_fetch_link_map_offsets (void);
 static int svr4_have_link_map_offsets (void);
 static void svr4_relocate_main_executable (void);
+static const char *svr4_map_so_name(char *name);
+static int svr4_have_map_so_name (void);
 static void svr4_free_library_list (void *p_list);
 
 /* Link map info to include in an allocated so_list entry.  */
@@ -1369,7 +1371,15 @@ svr4_read_so_list (CORE_ADDR lm, CORE_ADDR prev_lm,
 	  continue;
 	}
 
-      strncpy (new->so_name, buffer, SO_NAME_MAX_PATH_SIZE - 1);
+      if (svr4_have_map_so_name ())
+	{
+	  strncpy (new->so_name, svr4_map_so_name (buffer),
+	           SO_NAME_MAX_PATH_SIZE - 1);
+	}
+      else
+	{
+	  strncpy (new->so_name, buffer, SO_NAME_MAX_PATH_SIZE - 1);
+	}
       new->so_name[SO_NAME_MAX_PATH_SIZE - 1] = '\0';
       strcpy (new->so_original_name, new->so_name);
       xfree (buffer);
@@ -1435,7 +1445,7 @@ svr4_current_sos_direct (struct svr4_info *info)
 
   /* Assume that everything is a library if the dynamic loader was loaded
      late by a static executable.  */
-  if (exec_bfd && bfd_get_section_by_name (exec_bfd, ".dynamic") == NULL)
+  if (exec_bfd && find_program_interpreter() == NULL)
     ignore_first = 0;
   else
     ignore_first = 1;
@@ -2985,6 +2995,8 @@ struct solib_svr4_ops
 {
   /* Return a description of the layout of `struct link_map'.  */
   struct link_map_offsets *(*fetch_link_map_offsets)(void);
+  /* Return real path for the solib name given by ld.so.  */
+  const char *(*map_so_name)(char*);
 };
 
 /* Return a default for the architecture-specific operations.  */
@@ -2996,6 +3008,7 @@ solib_svr4_init (struct obstack *obstack)
 
   ops = OBSTACK_ZALLOC (obstack, struct solib_svr4_ops);
   ops->fetch_link_map_offsets = NULL;
+  ops->map_so_name = NULL;
   return ops;
 }
 
@@ -3011,6 +3024,17 @@ set_solib_svr4_fetch_link_map_offsets (struct gdbarch *gdbarch,
   ops->fetch_link_map_offsets = flmo;
 
   set_solib_ops (gdbarch, &svr4_so_ops);
+}
+
+/* Set function to map ld.so solib names to real paths.  */
+
+void
+set_solib_svr4_map_so_name(struct gdbarch *gdbarch,
+                           const char* (*map_so_name) (char*))
+{
+  struct solib_svr4_ops *ops = gdbarch_data (gdbarch, solib_svr4_data);
+
+  ops->map_so_name = map_so_name;
 }
 
 /* Fetch a link_map_offsets structure using the architecture-specific
@@ -3033,6 +3057,25 @@ svr4_have_link_map_offsets (void)
   struct solib_svr4_ops *ops = gdbarch_data (target_gdbarch (), solib_svr4_data);
 
   return (ops->fetch_link_map_offsets != NULL);
+}
+
+/* Return real path for the solib name given by ld.so.  */
+
+static const char *
+svr4_map_so_name(char *name)
+{
+  struct solib_svr4_ops *ops = gdbarch_data (target_gdbarch (), solib_svr4_data);
+  gdb_assert (ops->map_so_name);
+  return ops->map_so_name (name);
+}
+
+/* Return 1 if a solib name map function has been defined, 0 otherwise.  */
+
+static int
+svr4_have_map_so_name(void)
+{
+  struct solib_svr4_ops *ops = gdbarch_data (target_gdbarch (), solib_svr4_data);
+  return (ops->map_so_name != NULL);
 }
 
 

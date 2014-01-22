@@ -67,4 +67,6 @@ extern struct target_desc *tdesc_i386_mpx_linux;
 
 extern int i386_linux_gregset_reg_offset[];
 
+extern void i386_linux_init_gregset (struct gdbarch_tdep *tdep);
+
 #endif /* i386-linux-tdep.h */

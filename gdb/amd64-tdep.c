@@ -2062,6 +2062,75 @@ amd64_x32_analyze_stack_align (CORE_ADDR pc, CORE_ADDR current_pc,
   return min (pc + offset + 2, current_pc);
 }
 
+/* Check whether it is mov %ebp,%reg instruction.  The function returns the
+   size of instruction or zero if it is not recognized.  Fills reg with the
+   destination register number.  */
+static int
+amd64_is_mov_rbp_reg(gdb_byte* op, int* reg)
+{
+  int cur = 0;
+  *reg = 0;
+  /* [0x40] 0x89 0xe8  mov %ebp, %eax  */
+  if (op[cur] == 0x40 || op[cur] == 0x41)
+    {
+      cur++;
+      *reg += (op[cur] & 1) * 8;
+    }
+  if (op[cur] == 0x89 && (op[cur + 1] & 0xf8) == 0xe8)
+    {
+      *reg += op[cur + 1] & 7;
+      return cur + 2;
+    }
+  cur = 0;
+  *reg = 0;
+  /* [0x40] 0x8b 0xc5  mov %ebp, %eax  */
+  if (op[cur] == 0x40 || op[cur] == 0x44)
+    {
+      *reg += (op[cur] & 4) * 2;
+      cur++;
+    }
+  if (op[cur] == 0x8b && (op[cur + 1] & 0xc7) == 0xc5)
+    {
+      reg += (op[cur + 1] >> 3) & 7;
+      return cur + 2;
+    }
+  *reg = 0;
+  return 0;
+}
+
+/* Check whether it is push %rbp instruction or equivalent sequence
+   mov %ebp, %reg // push %reg.  Returns size of the instruction or zero
+   if it is not recognized.  */
+static int
+amd64_is_push_rbp(CORE_ADDR pc)
+{
+  int cur = 0;
+  int reg = 0;
+  int reg_push = 0;
+  gdb_byte op[5];
+  if (target_read_code(pc, op, 5) != 0)
+    return 0;
+  /* 55  push %rbp  */
+  if (op[0] == 0x55)
+    return 1;
+  cur = amd64_is_mov_rbp_reg(op, &reg);
+  if (cur == 0)
+    return 0;
+  /* Recognize push %reg instruction. */
+  if (op[cur] == 0x40 || op[cur] == 0x41)
+    {
+      reg_push += (op[cur] & 1) * 8;
+      cur++;
+    }
+  if ((op[cur] & 0xf8) == 0x50)
+    {
+      reg_push += op[cur] & 7;
+      if (reg == reg_push)
+	return cur + 1;
+    }
+  return 0;
+}
+
 /* Do a limited analysis of the prologue at PC and update CACHE
    accordingly.  Bail out early if CURRENT_PC is reached.  Return the
    address where the analysis stopped.
@@ -2094,7 +2163,7 @@ amd64_analyze_prologue (struct gdbarch *gdbarch,
   static const gdb_byte mov_esp_ebp_2[2] = { 0x8b, 0xec };
 
   gdb_byte buf[3];
-  gdb_byte op;
+  int push_rbp_size;
 
   if (current_pc <= pc)
     return current_pc;
@@ -2104,20 +2173,22 @@ amd64_analyze_prologue (struct gdbarch *gdbarch,
   else
     pc = amd64_analyze_stack_align (pc, current_pc, cache);
 
-  op = read_code_unsigned_integer (pc, 1, byte_order);
+  push_rbp_size = amd64_is_push_rbp(pc);
 
-  if (op == 0x55)		/* pushq %rbp */
+  if (push_rbp_size)		/* pushq %rbp */
     {
       /* Take into account that we've executed the `pushq %rbp' that
          starts this instruction sequence.  */
       cache->saved_regs[AMD64_RBP_REGNUM] = 0;
       cache->sp_offset += 8;
 
+      pc += push_rbp_size;
+
       /* If that's all, return now.  */
-      if (current_pc <= pc + 1)
+      if (current_pc <= pc)
         return current_pc;
 
-      read_code (pc + 1, buf, 3);
+      read_code (pc, buf, 3);
 
       /* Check for `movq %rsp, %rbp'.  */
       if (memcmp (buf, mov_rsp_rbp_1, 3) == 0
@@ -2125,7 +2196,7 @@ amd64_analyze_prologue (struct gdbarch *gdbarch,
 	{
 	  /* OK, we actually have a frame.  */
 	  cache->frameless_p = 0;
-	  return pc + 4;
+	  return pc + 3;
 	}
 
       /* For X32, also check for `movq %esp, %ebp'.  */
@@ -2136,11 +2207,11 @@ amd64_analyze_prologue (struct gdbarch *gdbarch,
 	    {
 	      /* OK, we actually have a frame.  */
 	      cache->frameless_p = 0;
-	      return pc + 3;
+	      return pc + 2;
 	    }
 	}
 
-      return pc + 1;
+      return pc;
     }
 
   return pc;

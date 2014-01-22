@@ -709,6 +709,14 @@ i386_linux_displaced_step_copy_insn (struct gdbarch *gdbarch,
   return closure;
 }
 
+void
+i386_linux_init_gregset (struct gdbarch_tdep *tdep)
+{
+  tdep->gregset_reg_offset = i386_linux_gregset_reg_offset;
+  tdep->gregset_num_regs = ARRAY_SIZE (i386_linux_gregset_reg_offset);
+  tdep->sizeof_gregset = 17 * 4;
+}
+
 static void
 i386_linux_init_abi (struct gdbarch_info info, struct gdbarch *gdbarch)
 {
@@ -747,9 +755,7 @@ i386_linux_init_abi (struct gdbarch_info info, struct gdbarch *gdbarch)
 
   tdep->register_reggroup_p = i386_linux_register_reggroup_p;
 
-  tdep->gregset_reg_offset = i386_linux_gregset_reg_offset;
-  tdep->gregset_num_regs = ARRAY_SIZE (i386_linux_gregset_reg_offset);
-  tdep->sizeof_gregset = 17 * 4;
+  i386_linux_init_gregset (tdep);
 
   tdep->jb_pc_offset = 20;	/* From <bits/setjmp.h>.  */
 

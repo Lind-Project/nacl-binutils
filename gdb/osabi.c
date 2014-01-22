@@ -71,6 +71,7 @@ static const char * const gdb_osabi_names[] =
   "DICOS",
   "Darwin",
   "Symbian",
+  "NaCl",
   "OpenVMS",
   "LynxOS178",
   "Newlib",

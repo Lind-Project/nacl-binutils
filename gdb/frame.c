@@ -558,6 +558,7 @@ int
 frame_id_eq (struct frame_id l, struct frame_id r)
 {
   int eq;
+  const uint32_t max_addr = (uint32_t) -1;
 
   if (!l.stack_addr_p && l.special_addr_p
       && !r.stack_addr_p && r.special_addr_p)
@@ -571,7 +572,12 @@ frame_id_eq (struct frame_id l, struct frame_id r)
     /* Like a NaN, if either ID is invalid, the result is false.
        Note that a frame ID is invalid iff it is the null frame ID.  */
     eq = 0;
-  else if (l.stack_addr != r.stack_addr)
+    /* Hack for PNaCl support.  Due to base address hiding
+       stack_addr may differ by base address.  This creates false
+       positives for normal 64-bit mode, so we need to find a better way.  */
+  else if ((l.stack_addr != r.stack_addr && l.stack_addr > max_addr
+	   && r.stack_addr > max_addr)
+	   || (uint32_t)l.stack_addr != (uint32_t)r.stack_addr)
     /* If .stack addresses are different, the frames are different.  */
     eq = 0;
   else if (l.code_addr_p && r.code_addr_p && l.code_addr != r.code_addr)

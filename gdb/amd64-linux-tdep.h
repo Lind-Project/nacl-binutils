@@ -311,4 +311,6 @@ enum amd64_syscall {
   amd64_sys_move_pages = 279,
 };
 
+extern void amd64_linux_init_gregset (struct gdbarch_tdep *tdep);
+
 #endif /* amd64-linux-tdep.h */

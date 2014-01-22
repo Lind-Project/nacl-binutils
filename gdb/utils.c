@@ -72,6 +72,10 @@
 #include "interps.h"
 #include "gdb_regex.h"
 
+#if defined(_WIN32) && !defined(__CYGWIN__)
+#include <windows.h>
+#endif
+
 #if !HAVE_DECL_MALLOC
 extern PTR malloc ();		/* ARI: PTR */
 #endif
@@ -193,6 +197,20 @@ show_pagination_enabled (struct ui_file *file, int from_tty,
 }
 
 
+#if defined(_WIN32) && !defined(__CYGWIN__)
+
+static void
+do_freeargv (void *arg)
+{
+  int i = 0;
+  char** args = (char**) arg;
+  for (i = 0; args[i] != NULL; i++)
+    free(args[i]);
+  free(args);
+}
+
+#else
+
 /* Cleanup utilities.
 
    These are not defined in cleanups.c (nor declared in cleanups.h)
@@ -204,6 +222,8 @@ do_freeargv (void *arg)
 {
   freeargv ((char **) arg);
 }
+
+#endif
 
 struct cleanup *
 make_cleanup_freeargv (char **arg)
@@ -3484,6 +3504,45 @@ ldirname (const char *filename)
   return dirname;
 }
 
+#if defined(_WIN32) && !defined(__CYGWIN__)
+
+char **
+gdb_buildargv (const char *s)
+{
+  LPWSTR wide_string;
+  int wide_len;
+  int arg_len;
+  int num_args;
+  LPWSTR* args;
+  char** result;
+  int i;
+  if (s == NULL)
+    return NULL;
+  wide_len = MultiByteToWideChar(CP_UTF8, 0, s, -1, NULL, 0);
+  wide_string = malloc(2 * wide_len);
+  if (wide_string == NULL)
+    malloc_failure (0);
+  MultiByteToWideChar(CP_UTF8, 0, s, -1, wide_string, wide_len);
+  args = CommandLineToArgvW(wide_string, &num_args);
+  free(wide_string);
+  result = malloc((num_args + 1) * sizeof(char*));
+  for (i = 0; i < num_args; i++)
+    {
+      arg_len = WideCharToMultiByte(CP_UTF8, 0, args[i], -1, NULL, 0,
+                                    NULL, NULL);
+      result[i] = malloc(arg_len);
+      if (result[i] == NULL)
+        malloc_failure(0);
+      WideCharToMultiByte(CP_UTF8, 0, args[i], -1, result[i], arg_len,
+                          NULL, NULL);
+    }
+  result[num_args] = NULL;
+  LocalFree(args);
+  return result;
+}
+
+#else
+
 /* Call libiberty's buildargv, and return the result.
    If buildargv fails due to out-of-memory, call nomem.
    Therefore, the returned value is guaranteed to be non-NULL,
@@ -3498,6 +3557,8 @@ gdb_buildargv (const char *s)
     malloc_failure (0);
   return argv;
 }
+
+#endif
 
 int
 compare_positive_ints (const void *ap, const void *bp)

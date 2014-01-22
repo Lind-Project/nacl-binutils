@@ -71,6 +71,9 @@ struct link_map_offsets
 extern void set_solib_svr4_fetch_link_map_offsets
   (struct gdbarch *gdbarch, struct link_map_offsets *(*func) (void));
 
+extern void set_solib_svr4_map_so_name
+  (struct gdbarch *gdbarch, const char *(*map_so_name) (char*));
+
 /* This function is called by thread_db.c.  Return the address of the
    link map for the given objfile.  */
 extern CORE_ADDR svr4_fetch_objfile_link_map (struct objfile *objfile);
