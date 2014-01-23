@@ -5668,8 +5668,6 @@ template<int size, bool big_endian>
 void
 Mips_output_data_la25_stub<size, big_endian>::do_write(Output_file* of)
 {
-  typedef typename elfcpp::Elf_types<size>::Elf_Addr Mips_address;
-
   const off_t offset = this->offset();
   const section_size_type oview_size =
     convert_to_section_size_type(this->data_size());
@@ -6037,8 +6035,6 @@ template<int size, bool big_endian>
 void
 Mips_output_data_mips_stubs<size, big_endian>::do_write(Output_file* of)
 {
-  typedef typename elfcpp::Elf_types<size>::Elf_Addr Mips_address;
-
   // Read processor-specific flags in ELF file header.
   const unsigned char* pehdr = of->get_output_view(elfcpp::file_header_offset,
                                    elfcpp::Elf_sizes<size>::ehdr_size);
