@@ -50,6 +50,9 @@ extern int gold_main(int argc, char** argv);
 #define FILENAME_METADATA "__PNACL_META"
 
 const int kMaxArgc = 256;
+// This value cannot change without also changing the signature of the
+// RunWithSplit RPC
+const int kMaxObjectFiles = 16;
 
 namespace
 {
@@ -328,6 +331,60 @@ SrpcRunWithDefaultCommandline(NaClSrpcRpc* rpc,
   RunCommon(arg_vec, rpc, done);
 }
 
+// SRPC signature: :ihhhhhhhhhhhhhhhhh:
+// i:   number N of object files to use
+// h{16}: handles of objfiles. N of them are valid.
+// h:  handle of nexe file
+void
+SrpcRunWithSplit(NaClSrpcRpc* rpc,
+                 NaClSrpcArg** in_args,
+                 NaClSrpcArg** /* out_args */,
+                 NaClSrpcClosure* done) {
+  int object_count = in_args[0]->u.ival;
+  if (object_count > kMaxObjectFiles || object_count < 1) {
+    gold_fatal(_("Invalid object count"));
+  }
+  std::vector<char *> filenames(object_count);
+  for (int i = 0; i < object_count; i++) {
+    const int len = sizeof(FILENAME_OBJ) + 2;
+    filenames[i] = new char[len];
+    snprintf(filenames[i], len, "%s%d", FILENAME_OBJ, i);
+    RegisterPreopenedFd(filenames[i], in_args[i + 1]->u.hval);
+  }
+  int nexe_fd = in_args[kMaxObjectFiles + 1]->u.hval;
+  RegisterPreopenedFd(FILENAME_OUTPUT, nexe_fd);
+
+  std::vector<std::string> result_arg_vec;
+  PnaclTargetArchitecture arch =
+    PnaclTargetArchitecture(__builtin_nacl_target_arch());
+
+  ProcessCommandline(kDefaultCommandCommon, arch, "", "", &result_arg_vec);
+  // Construct the rest of the command line, replacing FILENAME_OBJ with a list
+  // of input files from the descriptors.
+  const int cmdline_len = ((sizeof(kDefaultCommandStatic) /
+                            sizeof(kDefaultCommandStatic[0])) +
+                           object_count - 1);
+  const char *command_line[cmdline_len];
+
+  int arg = 0;
+  for (int i = 0; kDefaultCommandStatic[i] != 0; i++) {
+    if (!strcmp(kDefaultCommandStatic[i], FILENAME_OBJ)) {
+      for (int k = 0; k < object_count; k++) {
+        command_line[arg++] = filenames[k];
+      }
+    } else {
+      command_line[arg++] = kDefaultCommandStatic[i];
+    }
+  }
+  command_line[arg] = 0;
+
+  ProcessCommandline(command_line, arch, "", "", &result_arg_vec);
+  for (int i = 0; i < object_count; i++) {
+    delete [] filenames[i];
+  }
+  RunCommon(result_arg_vec, rpc, done);
+}
+
 } // End namespace gold.
 
 namespace nacl_file
@@ -372,6 +429,7 @@ main()
   const struct NaClSrpcHandlerDesc srpc_methods[] = {
     { "Run:hC:", SrpcRunWithCustomCommandline },
     { "RunWithDefaultCommandLine:hhiss:", SrpcRunWithDefaultCommandline },
+    { "RunWithSplit:ihhhhhhhhhhhhhhhhh:", SrpcRunWithSplit },
     { NULL, NULL },
   };
 
