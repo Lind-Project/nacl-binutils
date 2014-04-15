@@ -27,7 +27,6 @@
 #error "Cannot build nacl_file.cc without __native_client__"
 #endif
 
-#include <argz.h>
 #include <fcntl.h>
 #include <map>
 #include <string>
@@ -37,7 +36,6 @@
 #include "native_client/src/public/imc_syscalls.h"
 #include "native_client/src/public/name_service.h"
 #include "native_client/src/shared/srpc/nacl_srpc.h"
-#include "native_client/src/untrusted/nacl/pnacl.h"
 
 #include "gold.h"
 
@@ -47,7 +45,6 @@ extern int gold_main(int argc, char** argv);
 
 #define FILENAME_OUTPUT   "a.out"
 #define FILENAME_OBJ      "__PNACL_GENERATED"
-#define FILENAME_METADATA "__PNACL_META"
 
 const int kMaxArgc = 256;
 // This value cannot change without also changing the signature of the
@@ -61,11 +58,10 @@ std::map<std::string, int> g_preopened_files;
 // Register some filename -> fd mappings so that we do not
 // need to use the ManifestNameService  (aka directory) service.
 // Note, there seems to be the following convention:
-// the directory service knows about files like  "files/<filename>"
-// locally we one refer to the files as <filename>.
-// For object files passed in via SrpcRunWithDefaultCommandline
-// we register the incoming .o descriptor as FILENAME_OBJ
-// WITHOUT the "files/" prefix.
+// the directory service knows about files like  "files/<filename>".
+// Locally, we refer to the files as <filename>.
+// For object files passed in via Srpc, we register the incoming .o
+// descriptor as FILENAME_OBJ WITHOUT the "files/" prefix.
 void RegisterPreopenedFd(const char* filename, int fd) {
   std::string key(filename);
   std::map<std::string, int>::iterator it = g_preopened_files.find(key);
@@ -133,7 +129,7 @@ const int kUnknownFd = -1;
 int LookupFileByName(const char* filename) {
   int fd = kUnknownFd;
   int status;
-  // Todo(robertm): document assumptions about "files/" prefix
+  // Files looked up via the nameservice are assumed to have a "files/" prefix.
   std::string prefix("files/");
   std::string full_filename = prefix + std::string(filename);
   NaClSrpcError error =
@@ -165,34 +161,6 @@ void RunCommon(const std::vector<std::string>& arg_vec,
   done->Run(done);
 }
 
-// SRPC signature: :hC:
-// h: handle of nexe file
-// C: argz encoded commandline WITHOUT "-o <output>" which will
-//    be appended automagically.
-void
-SrpcRunWithCustomCommandline(NaClSrpcRpc* rpc,
-                            NaClSrpcArg** in_args,
-                            NaClSrpcArg** /* out_args */,
-                            NaClSrpcClosure* done) {
-  // the commandline is passed as string with zero separators
-  size_t command_line_len = (size_t) in_args[1]->u.count;
-  char* command_line_string = in_args[1]->arrays.carr;
-
-  int nexe_fd = in_args[0]->u.hval;
-  RegisterPreopenedFd(FILENAME_OUTPUT, nexe_fd);
-
-  std::vector<std::string> arg_vec;
-  const char* current = NULL;
-  do {
-    current = argz_next(command_line_string, command_line_len, current);
-    if (current != NULL) arg_vec.push_back(current);
-  } while (current != NULL);
-
-  // we always append  "-o <output>"
-  arg_vec.push_back("-o");
-  arg_vec.push_back(FILENAME_OUTPUT);
-  RunCommon(arg_vec, rpc, done);
-}
 
 // c.f.: pnacl/driver/pnacl-nativeld.py
 const char* kDefaultCommandCommon[] = {
@@ -219,38 +187,8 @@ const char* kDefaultCommandStatic[] = {
   0,  // sentinel
 };
 
-const char* kDefaultCommandShared[] = {
-  "-shared",
-  "--bsssegment",
-  "@target",     // replaced with arch specific stuff
-  "--metadata",
-  FILENAME_METADATA,
-  "crtbeginS.o",
-  FILENAME_OBJ,
-  // TODO(robertm): library deps missing
-  "crtendS.o",
-  0,  // sentinel
-};
-
-const char* kDefaultCommandDynamic[] = {
-  "-dynamic",
-  "--bsssegment",
-  "@target",     // replaced with arch specific stuff
-  "--metadata",
-  FILENAME_METADATA,
-  "crtbegin.o",
-  FILENAME_OBJ,
-  "@shim",
-  // TODO(robertm): library deps missing
-  "crtend.o",
-  0,  // sentinel
-};
-
 
 void ProcessCommandline(const char** src,
-                        PnaclTargetArchitecture arch,
-                        const char* /* soname */,
-                        const char* /* shared_library_dependencies */,
                         std::vector<std::string>* result) {
   for (int i = 0; src[i] != 0; ++i) {
     if (src[i][0] != '@') {
@@ -258,9 +196,7 @@ void ProcessCommandline(const char** src,
       continue;
     }
 
-    if (src[i] == std::string("@target")) {
-      // TODO(robertm): add target info for metainfo processimg
-    } else if (src[i] == std::string("@shim")) {
+    if (src[i] == std::string("@shim")) {
       result->push_back("--entry=__pnacl_start");
       result->push_back("libpnacl_irt_shim.a");
     } else {
@@ -269,67 +205,6 @@ void ProcessCommandline(const char** src,
   }
 }
 
-
-// SRPC signature: :hhiss:
-// h:  handle of objfile   (note: these could probably be also looked up)
-// h:  handle of nexe file (note: these could probably be also looked up)
-// i:  type of output image
-// s:  soname (for shared type)
-// s:  libs   (for non-static types)
-// Todo(robertm, jvoung): describe assumptions made by the browser
-//                        and sel_universal when using this SRPC
-void
-SrpcRunWithDefaultCommandline(NaClSrpcRpc* rpc,
-                              NaClSrpcArg** in_args,
-                              NaClSrpcArg** /* out_args */,
-                              NaClSrpcClosure* done) {
-  // Note: mode is no longer zero/one (is_shared_library)
-  int mode = in_args[2]->u.ival;
-  const char* soname = in_args[3]->arrays.str;
-  const char* libs = in_args[4]->arrays.str;
-
-  int obj_fd = in_args[0]->u.hval;
-  RegisterPreopenedFd(FILENAME_OBJ, obj_fd);
-
-  int nexe_fd = in_args[1]->u.hval;
-  RegisterPreopenedFd(FILENAME_OUTPUT, nexe_fd);
-
-  const char** command_template;
-  switch (mode) {
-   default:
-    gold_fatal(_("unknown output mode\n"));
-    break;
-   case 0:
-    command_template = kDefaultCommandStatic;
-    break;
-   case 1:
-    command_template = kDefaultCommandShared;
-    break;
-   case 2:
-    command_template = kDefaultCommandDynamic;
-    break;
-  }
-
-  // it would be cleaner to use a vector<string> here but the extra
-  // code for copying this to the argv is probably not worth it.
-  std::vector<std::string> arg_vec;
-  PnaclTargetArchitecture arch =
-    PnaclTargetArchitecture(__builtin_nacl_target_arch());
-
-  ProcessCommandline(kDefaultCommandCommon,
-                     arch,
-                     soname,
-                     libs,
-                     &arg_vec);
-
-  ProcessCommandline(command_template,
-                     arch,
-                     soname,
-                     libs,
-                     &arg_vec);
-
-  RunCommon(arg_vec, rpc, done);
-}
 
 // SRPC signature: :ihhhhhhhhhhhhhhhhh:
 // i:   number N of object files to use
@@ -355,10 +230,8 @@ SrpcRunWithSplit(NaClSrpcRpc* rpc,
   RegisterPreopenedFd(FILENAME_OUTPUT, nexe_fd);
 
   std::vector<std::string> result_arg_vec;
-  PnaclTargetArchitecture arch =
-    PnaclTargetArchitecture(__builtin_nacl_target_arch());
 
-  ProcessCommandline(kDefaultCommandCommon, arch, "", "", &result_arg_vec);
+  ProcessCommandline(kDefaultCommandCommon, &result_arg_vec);
   // Construct the rest of the command line, replacing FILENAME_OBJ with a list
   // of input files from the descriptors.
   const int cmdline_len = ((sizeof(kDefaultCommandStatic) /
@@ -378,7 +251,7 @@ SrpcRunWithSplit(NaClSrpcRpc* rpc,
   }
   command_line[arg] = 0;
 
-  ProcessCommandline(command_line, arch, "", "", &result_arg_vec);
+  ProcessCommandline(command_line, &result_arg_vec);
   for (int i = 0; i < object_count; i++) {
     delete [] filenames[i];
   }
@@ -427,8 +300,6 @@ main()
   // Start the message loop to process SRPCs.
   // It usually never terminates unless killed.
   const struct NaClSrpcHandlerDesc srpc_methods[] = {
-    { "Run:hC:", SrpcRunWithCustomCommandline },
-    { "RunWithDefaultCommandLine:hhiss:", SrpcRunWithDefaultCommandline },
     { "RunWithSplit:ihhhhhhhhhhhhhhhhh:", SrpcRunWithSplit },
     { NULL, NULL },
   };
