@@ -133,9 +133,18 @@ write_debug_script(std::string, const char*, const char*)
 
 #endif // !defined(DEBUG)
 
+// @LOCALMOD-SB-BEGIN
+// For the SRPC build, main() is defined in nacl_file.cc and runs the SRPC
+// main loop. gold_main() is called by the RPC handler.
+#if defined(__native_client__)
+int
+gold_main(int argc, char** argv)
+#else
 
 int
 main(int argc, char** argv)
+#endif
+// @LOCALMOD-SB-END
 {
 #if defined (HAVE_SETLOCALE) && defined (HAVE_LC_MESSAGES)
   setlocale(LC_MESSAGES, "");
@@ -149,7 +158,12 @@ main(int argc, char** argv)
   program_name = argv[0];
 
   // In libiberty; expands @filename to the args in "filename".
+  // @LOCALMOD-SB: skip this in SRPC mode since the commandline we
+  // build will likely not have @filename (and we can avoid hijacking
+  // the file open operation there).
+#if !defined(__native_client__)
   expandargv(&argc, &argv);
+#endif
 
   // This is used by write_debug_script(), which wants the unedited argv.
   std::string args = collect_argv(argc, argv);
@@ -323,10 +337,17 @@ main(int argc, char** argv)
       && errors.error_count() == 0)
     gold_error("treating warnings as errors");
 
+  // @LOCALMOD-SB-BEGIN
+  // This function is called via SRPC - we do not want it to exit
+#if defined(__native_client__)
+  return errors.error_count() > 0;
+#else
   // If the user used --noinhibit-exec, we force the exit status to be
   // successful.  This is compatible with GNU ld.
   gold_exit((errors.error_count() == 0
 	     || parameters->options().noinhibit_exec())
 	    ? GOLD_OK
 	    : GOLD_ERR);
+#endif
+  // @LOCALMOD-SB-END
 }

@@ -182,6 +182,13 @@ cplus_demangle_fill_operator (struct demangle_component *p,
 struct demangle_component *
 cplus_demangle_v3_components (const char *mangled, int options, void **mem)
 {
+/*
+ * @LOCALMOD-BEGIN: Prune out demangling support since stable PNaCl pexes
+ * do not have symbols.  Everything is "unnamedN", "unnamedN+1", etc.
+ */
+#if defined(__native_client__)
+  return NULL;
+#else
   size_t len;
   int type;
   struct d_info di;
@@ -229,4 +236,6 @@ cplus_demangle_v3_components (const char *mangled, int options, void **mem)
     free (di.comps);
 
   return dc;
+#endif
+/* @LOCALMOD-END */
 }
