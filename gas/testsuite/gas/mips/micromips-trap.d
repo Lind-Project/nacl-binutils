@@ -5091,10 +5091,9 @@ Disassembly of section \.text:
 [ 0-9a-f]+:	5441 0099 	alnv\.ps	\$f0,\$f1,\$f2,v0
 [ 0-9a-f]+:	5441 07d9 	alnv\.ps	\$f0,\$f1,\$f2,ra
 [ 0-9a-f]+:	57fe efd9 	alnv\.ps	\$f29,\$f30,\$f31,ra
-[ 0-9a-f]+:	57fd efd9 	alnv\.ps	\$f29,\$f29,\$f31,ra
 [ 0-9a-f]+:	4380 fffe 	bc1f	[0-9a-f]+ <fp_test\+0x[0-9a-f]+>
 [ 	]*[0-9a-f]+: R_MICROMIPS_PC16_S1	fp_test
-[ 0-9a-f]+:	0c00      	nop
+[ 0-9a-f]+:	57fd efd9 	alnv\.ps	\$f29,\$f29,\$f31,ra
 [ 0-9a-f]+:	4380 fffe 	bc1f	[0-9a-f]+ <fp_test\+0x[0-9a-f]+>
 [ 	]*[0-9a-f]+: R_MICROMIPS_PC16_S1	fp_test
 [ 0-9a-f]+:	0c00      	nop
@@ -6559,16 +6558,16 @@ Disassembly of section \.text:
 [ 0-9a-f]+:	4643      	mflo	v1
 [ 0-9a-f]+:	5843 07ec 	dext	v0,v1,0x1f,0x1
 [ 0-9a-f]+:	5843 f82c 	dext	v0,v1,0x0,0x20
-[ 0-9a-f]+:	5843 07e4 	dextm	v0,v1,0x1f,0x21
-[ 0-9a-f]+:	5843 07e4 	dextm	v0,v1,0x1f,0x21
-[ 0-9a-f]+:	5843 4854 	dextu	v0,v1,0x21,0xa
-[ 0-9a-f]+:	5843 4854 	dextu	v0,v1,0x21,0xa
+[ 0-9a-f]+:	5843 07e4 	dext	v0,v1,0x1f,0x21
+[ 0-9a-f]+:	5843 07e4 	dext	v0,v1,0x1f,0x21
+[ 0-9a-f]+:	5843 4854 	dext	v0,v1,0x21,0xa
+[ 0-9a-f]+:	5843 4854 	dext	v0,v1,0x21,0xa
 [ 0-9a-f]+:	5843 ffcc 	dins	v0,v1,0x1f,0x1
 [ 0-9a-f]+:	5843 f80c 	dins	v0,v1,0x0,0x20
-[ 0-9a-f]+:	5843 ffc4 	dinsm	v0,v1,0x1f,0x21
-[ 0-9a-f]+:	5843 ffc4 	dinsm	v0,v1,0x1f,0x21
-[ 0-9a-f]+:	5843 5074 	dinsu	v0,v1,0x21,0xa
-[ 0-9a-f]+:	5843 5074 	dinsu	v0,v1,0x21,0xa
+[ 0-9a-f]+:	5843 ffc4 	dins	v0,v1,0x1f,0x21
+[ 0-9a-f]+:	5843 ffc4 	dins	v0,v1,0x1f,0x21
+[ 0-9a-f]+:	5843 5074 	dins	v0,v1,0x21,0xa
+[ 0-9a-f]+:	5843 5074 	dins	v0,v1,0x21,0xa
 [ 0-9a-f]+:	41a2 0000 	lui	v0,0x0
 [ 	]*[0-9a-f]+: R_MICROMIPS_HI16	test
 [ 0-9a-f]+:	3042 0000 	addiu	v0,v0,0

@@ -7,7 +7,7 @@
 
 /* Main header file for the bfd library -- portable access to object files.
 
-   Copyright 1990-2013 2013 Free Software Foundation, Inc.
+   Copyright 1990-2013 Free Software Foundation, Inc.
 
    Contributed by Cygnus Support.
 
@@ -1953,6 +1953,10 @@ enum bfd_architecture
   bfd_arch_k1om,   /* Intel K1OM */
 #define bfd_mach_k1om                  (1 << 6)
 #define bfd_mach_k1om_intel_syntax     (bfd_mach_k1om | bfd_mach_i386_intel_syntax)
+#define bfd_mach_i386_nacl             (1 << 7)
+#define bfd_mach_i386_i386_nacl        (bfd_mach_i386_i386 | bfd_mach_i386_nacl)
+#define bfd_mach_x86_64_nacl           (bfd_mach_x86_64 | bfd_mach_i386_nacl)
+#define bfd_mach_x64_32_nacl           (bfd_mach_x64_32 | bfd_mach_i386_nacl)
   bfd_arch_we32k,     /* AT&T WE32xxx */
   bfd_arch_tahoe,     /* CCI/Harris Tahoe */
   bfd_arch_i860,      /* Intel 860 */
@@ -3119,6 +3123,8 @@ instruction.  */
   BFD_RELOC_X86_64_TLSDESC_CALL,
   BFD_RELOC_X86_64_TLSDESC,
   BFD_RELOC_X86_64_IRELATIVE,
+  BFD_RELOC_X86_64_PC32_BND,
+  BFD_RELOC_X86_64_PLT32_BND,
 
 /* ns32k relocations  */
   BFD_RELOC_NS32K_IMM_8,
@@ -3217,6 +3223,8 @@ instruction.  */
   BFD_RELOC_PPC64_TOC16_LO_DS,
   BFD_RELOC_PPC64_PLTGOT16_DS,
   BFD_RELOC_PPC64_PLTGOT16_LO_DS,
+  BFD_RELOC_PPC64_ADDR16_HIGH,
+  BFD_RELOC_PPC64_ADDR16_HIGHA,
 
 /* PowerPC and PowerPC64 thread-local storage relocations.  */
   BFD_RELOC_PPC_TLS,
@@ -3261,6 +3269,10 @@ instruction.  */
   BFD_RELOC_PPC64_DTPREL16_HIGHERA,
   BFD_RELOC_PPC64_DTPREL16_HIGHEST,
   BFD_RELOC_PPC64_DTPREL16_HIGHESTA,
+  BFD_RELOC_PPC64_TPREL16_HIGH,
+  BFD_RELOC_PPC64_TPREL16_HIGHA,
+  BFD_RELOC_PPC64_DTPREL16_HIGH,
+  BFD_RELOC_PPC64_DTPREL16_HIGHA,
 
 /* IBM 370/390 relocations  */
   BFD_RELOC_I370_D12,

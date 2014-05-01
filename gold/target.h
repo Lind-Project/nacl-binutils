@@ -1,6 +1,6 @@
 // target.h -- target support for gold   -*- C++ -*-
 
-// Copyright 2006, 2007, 2008, 2009, 2010, 2011, 2012
+// Copyright 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013
 // Free Software Foundation, Inc.
 // Written by Ian Lance Taylor <iant@google.com>.
 
@@ -238,7 +238,7 @@ class Target
   // Adjust the output file header before it is written out.  VIEW
   // points to the header in external form.  LEN is the length.
   void
-  adjust_elf_header(unsigned char* view, int len) const
+  adjust_elf_header(unsigned char* view, int len)
   { return this->do_adjust_elf_header(view, len); }
 
   // Return address and size to plug into eh_frame FDEs associated with a PLT.
@@ -449,6 +449,11 @@ class Target
   gc_mark_symbol(Symbol_table* symtab, Symbol* sym) const
   { this->do_gc_mark_symbol(symtab, sym); }
 
+  // Return the name of the entry point symbol.
+  const char*
+  entry_symbol_name() const
+  { return this->pti_->entry_symbol_name; }
+
  protected:
   // This struct holds the constant information for a child class.  We
   // use a struct to avoid the overhead of virtual function calls for
@@ -502,6 +507,8 @@ class Target
     const char* attributes_section;
     // Vendor name of vendor attributes.
     const char* attributes_vendor;
+    // Name of the main entry point to the program.
+    const char* entry_symbol_name;
   };
 
   Target(const Target_info* pti)
@@ -541,7 +548,7 @@ class Target
   // By default, we set the EI_OSABI field if requested (in
   // Sized_target).
   virtual void
-  do_adjust_elf_header(unsigned char*, int) const = 0;
+  do_adjust_elf_header(unsigned char*, int) = 0;
 
   // Return address and size to plug into eh_frame FDEs associated with a PLT.
   virtual void
@@ -1011,7 +1018,7 @@ class Sized_target : public Target
 
   // Set the EI_OSABI field if requested.
   virtual void
-  do_adjust_elf_header(unsigned char*, int) const;
+  do_adjust_elf_header(unsigned char*, int);
 
   // Handle target specific gc actions when adding a gc reference.
   virtual void

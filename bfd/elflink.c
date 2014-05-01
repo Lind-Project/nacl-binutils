@@ -85,7 +85,8 @@ _bfd_elf_define_linkage_sym (bfd *abfd,
   h->def_regular = 1;
   h->non_elf = 0;
   h->type = STT_OBJECT;
-  h->other = (h->other & ~ELF_ST_VISIBILITY (-1)) | STV_HIDDEN;
+  if (ELF_ST_VISIBILITY (h->other) != STV_INTERNAL)
+    h->other = (h->other & ~ELF_ST_VISIBILITY (-1)) | STV_HIDDEN;
 
   bed = get_elf_backend_data (abfd);
   (*bed->elf_backend_hide_symbol) (info, h, TRUE);
@@ -950,17 +951,55 @@ _bfd_elf_merge_symbol (bfd *abfd,
 
   bed = get_elf_backend_data (abfd);
 
-  /* This code is for coping with dynamic objects, and is only useful
-     if we are doing an ELF link.  */
-  if (!(*bed->relocs_compatible) (abfd->xvec, info->output_bfd->xvec))
-    return TRUE;
-
   /* For merging, we only care about real symbols.  But we need to make
      sure that indirect symbol dynamic flags are updated.  */
   hi = h;
   while (h->root.type == bfd_link_hash_indirect
 	 || h->root.type == bfd_link_hash_warning)
     h = (struct elf_link_hash_entry *) h->root.u.i.link;
+
+  /* OLDBFD and OLDSEC are a BFD and an ASECTION associated with the
+     existing symbol.  */
+
+  oldbfd = NULL;
+  oldsec = NULL;
+  switch (h->root.type)
+    {
+    default:
+      break;
+
+    case bfd_link_hash_undefined:
+    case bfd_link_hash_undefweak:
+      oldbfd = h->root.u.undef.abfd;
+      break;
+
+    case bfd_link_hash_defined:
+    case bfd_link_hash_defweak:
+      oldbfd = h->root.u.def.section->owner;
+      oldsec = h->root.u.def.section;
+      break;
+
+    case bfd_link_hash_common:
+      oldbfd = h->root.u.c.p->section->owner;
+      oldsec = h->root.u.c.p->section;
+      if (pold_alignment)
+	*pold_alignment = h->root.u.c.p->alignment_power;
+      break;
+    }
+  if (poldbfd && *poldbfd == NULL)
+    *poldbfd = oldbfd;
+
+  /* Differentiate strong and weak symbols.  */
+  newweak = bind == STB_WEAK;
+  oldweak = (h->root.type == bfd_link_hash_defweak
+	     || h->root.type == bfd_link_hash_undefweak);
+  if (pold_weak)
+    *pold_weak = oldweak;
+
+  /* This code is for coping with dynamic objects, and is only useful
+     if we are doing an ELF link.  */
+  if (!(*bed->relocs_compatible) (abfd->xvec, info->output_bfd->xvec))
+    return TRUE;
 
   /* We have to check it for every instance since the first few may be
      references and not all compilers emit symbol type for undefined
@@ -1005,45 +1044,6 @@ _bfd_elf_merge_symbol (bfd *abfd,
       h->non_elf = 0;
       return TRUE;
     }
-
-  /* OLDBFD and OLDSEC are a BFD and an ASECTION associated with the
-     existing symbol.  */
-
-  switch (h->root.type)
-    {
-    default:
-      oldbfd = NULL;
-      oldsec = NULL;
-      break;
-
-    case bfd_link_hash_undefined:
-    case bfd_link_hash_undefweak:
-      oldbfd = h->root.u.undef.abfd;
-      oldsec = NULL;
-      break;
-
-    case bfd_link_hash_defined:
-    case bfd_link_hash_defweak:
-      oldbfd = h->root.u.def.section->owner;
-      oldsec = h->root.u.def.section;
-      break;
-
-    case bfd_link_hash_common:
-      oldbfd = h->root.u.c.p->section->owner;
-      oldsec = h->root.u.c.p->section;
-      if (pold_alignment)
-	*pold_alignment = h->root.u.c.p->alignment_power;
-      break;
-    }
-  if (poldbfd && *poldbfd == NULL)
-    *poldbfd = oldbfd;
-
-  /* Differentiate strong and weak symbols.  */
-  newweak = bind == STB_WEAK;
-  oldweak = (h->root.type == bfd_link_hash_defweak
-	     || h->root.type == bfd_link_hash_undefweak);
-  if (pold_weak)
-    *pold_weak = oldweak;
 
   /* In cases involving weak versioned symbols, we may wind up trying
      to merge a symbol with itself.  Catch that here, to avoid the
@@ -1437,7 +1437,10 @@ _bfd_elf_merge_symbol (bfd *abfd,
       if (!(oldbfd != NULL
 	    && (oldbfd->flags & BFD_PLUGIN) != 0
 	    && (abfd->flags & BFD_PLUGIN) == 0))
-	*skip = TRUE;
+	{
+	  newdef = FALSE;
+	  *skip = TRUE;
+	}
 
       /* Merge st_other.  If the symbol already has a dynamic index,
 	 but visibility says it should not be visible, turn it into a
@@ -1702,6 +1705,12 @@ _bfd_elf_add_default_symbol (bfd *abfd,
       ht = (struct elf_link_hash_entry *) hi->root.u.i.link;
       (*bed->elf_backend_copy_indirect_symbol) (info, ht, hi);
 
+      /* A reference to the SHORTNAME symbol from a dynamic library
+	 will be satisfied by the versioned symbol at runtime.  In
+	 effect, we have a reference to the versioned symbol.  */
+      ht->ref_dynamic_nonweak |= hi->ref_dynamic_nonweak;
+      hi->dynamic_def |= ht->dynamic_def;
+
       /* See if the new flags lead us to realize that the symbol must
 	 be dynamic.  */
       if (! *dynsym)
@@ -1771,6 +1780,8 @@ nondefault:
       if (hi->root.type == bfd_link_hash_indirect)
 	{
 	  (*bed->elf_backend_copy_indirect_symbol) (info, h, hi);
+	  h->ref_dynamic_nonweak |= hi->ref_dynamic_nonweak;
+	  hi->dynamic_def |= h->dynamic_def;
 
 	  /* See if the new flags lead us to realize that the symbol
 	     must be dynamic.  */
@@ -3309,6 +3320,18 @@ _bfd_elf_relocs_compatible (const bfd_target *input,
   return ibed->relocs_compatible == obed->relocs_compatible;
 }
 
+/* Make a special call to the linker "notice" function to tell it that
+   we are about to handle an as-needed lib, or have finished
+   processing the lib.  */ 
+
+bfd_boolean
+_bfd_elf_notice_as_needed (bfd *ibfd,
+			   struct bfd_link_info *info,
+			   enum notice_asneeded_action act)
+{
+  return (*info->callbacks->notice) (info, NULL, ibfd, NULL, act, 0, NULL);
+}
+
 /* Add symbols from an ELF object file to the linker hash table.  */
 
 static bfd_boolean
@@ -3344,6 +3367,7 @@ elf_link_add_object_symbols (bfd *abfd, struct bfd_link_info *info)
   long old_dynsymcount = 0;
   bfd_size_type old_dynstr_size = 0;
   size_t tabsize = 0;
+  asection *s;
 
   htab = elf_hash_table (info);
   bed = get_elf_backend_data (abfd);
@@ -3385,75 +3409,64 @@ elf_link_add_object_symbols (bfd *abfd, struct bfd_link_info *info)
      symbol.  This differs from .gnu.warning sections, which generate
      warnings when they are included in an output file.  */
   /* PR 12761: Also generate this warning when building shared libraries.  */
-  if (info->executable || info->shared)
+  for (s = abfd->sections; s != NULL; s = s->next)
     {
-      asection *s;
+      const char *name;
 
-      for (s = abfd->sections; s != NULL; s = s->next)
+      name = bfd_get_section_name (abfd, s);
+      if (CONST_STRNEQ (name, ".gnu.warning."))
 	{
-	  const char *name;
+	  char *msg;
+	  bfd_size_type sz;
 
-	  name = bfd_get_section_name (abfd, s);
-	  if (CONST_STRNEQ (name, ".gnu.warning."))
+	  name += sizeof ".gnu.warning." - 1;
+
+	  /* If this is a shared object, then look up the symbol
+	     in the hash table.  If it is there, and it is already
+	     been defined, then we will not be using the entry
+	     from this shared object, so we don't need to warn.
+	     FIXME: If we see the definition in a regular object
+	     later on, we will warn, but we shouldn't.  The only
+	     fix is to keep track of what warnings we are supposed
+	     to emit, and then handle them all at the end of the
+	     link.  */
+	  if (dynamic)
 	    {
-	      char *msg;
-	      bfd_size_type sz;
+	      struct elf_link_hash_entry *h;
 
-	      name += sizeof ".gnu.warning." - 1;
+	      h = elf_link_hash_lookup (htab, name, FALSE, FALSE, TRUE);
 
-	      /* If this is a shared object, then look up the symbol
-		 in the hash table.  If it is there, and it is already
-		 been defined, then we will not be using the entry
-		 from this shared object, so we don't need to warn.
-		 FIXME: If we see the definition in a regular object
-		 later on, we will warn, but we shouldn't.  The only
-		 fix is to keep track of what warnings we are supposed
-		 to emit, and then handle them all at the end of the
-		 link.  */
-	      if (dynamic)
-		{
-		  struct elf_link_hash_entry *h;
+	      /* FIXME: What about bfd_link_hash_common?  */
+	      if (h != NULL
+		  && (h->root.type == bfd_link_hash_defined
+		      || h->root.type == bfd_link_hash_defweak))
+		continue;
+	    }
 
-		  h = elf_link_hash_lookup (htab, name, FALSE, FALSE, TRUE);
+	  sz = s->size;
+	  msg = (char *) bfd_alloc (abfd, sz + 1);
+	  if (msg == NULL)
+	    goto error_return;
 
-		  /* FIXME: What about bfd_link_hash_common?  */
-		  if (h != NULL
-		      && (h->root.type == bfd_link_hash_defined
-			  || h->root.type == bfd_link_hash_defweak))
-		    {
-		      /* We don't want to issue this warning.  Clobber
-			 the section size so that the warning does not
-			 get copied into the output file.  */
-		      s->size = 0;
-		      continue;
-		    }
-		}
+	  if (! bfd_get_section_contents (abfd, s, msg, 0, sz))
+	    goto error_return;
 
-	      sz = s->size;
-	      msg = (char *) bfd_alloc (abfd, sz + 1);
-	      if (msg == NULL)
-		goto error_return;
+	  msg[sz] = '\0';
 
-	      if (! bfd_get_section_contents (abfd, s, msg, 0, sz))
-		goto error_return;
+	  if (! (_bfd_generic_link_add_one_symbol
+		 (info, abfd, name, BSF_WARNING, s, 0, msg,
+		  FALSE, bed->collect, NULL)))
+	    goto error_return;
 
-	      msg[sz] = '\0';
+	  if (!info->relocatable && info->executable)
+	    {
+	      /* Clobber the section size so that the warning does
+		 not get copied into the output file.  */
+	      s->size = 0;
 
-	      if (! (_bfd_generic_link_add_one_symbol
-		     (info, abfd, name, BSF_WARNING, s, 0, msg,
-		      FALSE, bed->collect, NULL)))
-		goto error_return;
-
-	      if (!info->relocatable && !info->shared)
-		{
-		  /* Clobber the section size so that the warning does
-		     not get copied into the output file.  */
-		  s->size = 0;
-
-		  /* Also set SEC_EXCLUDE, so that symbols defined in
-		     the warning section don't get copied to the output.  */
-		  s->flags |= SEC_EXCLUDE;
-		}
+	      /* Also set SEC_EXCLUDE, so that symbols defined in
+		 the warning section don't get copied to the output.  */
+	      s->flags |= SEC_EXCLUDE;
 	    }
 	}
     }
@@ -3479,7 +3492,6 @@ elf_link_add_object_symbols (bfd *abfd, struct bfd_link_info *info)
     goto error_return;
   else
     {
-      asection *s;
       const char *soname = NULL;
       char *audit = NULL;
       struct bfd_link_needed_list *rpath = NULL, *runpath = NULL;
@@ -3777,8 +3789,7 @@ error_free_dyn:
 
       /* Make a special call to the linker "notice" function to
 	 tell it that we are about to handle an as-needed lib.  */
-      if (!(*info->callbacks->notice) (info, NULL, abfd, NULL,
-				       notice_as_needed, 0, NULL))
+      if (!(*bed->notice_as_needed) (abfd, info, notice_as_needed))
 	goto error_free_vers;
 
       /* Clone the symbol table.  Remember some pointers into the
@@ -4472,8 +4483,6 @@ error_free_dyn:
       unsigned int i;
 
       /* Restore the symbol table.  */
-      if (bed->as_needed_cleanup)
-	(*bed->as_needed_cleanup) (abfd, info);
       old_ent = (char *) old_tab + tabsize;
       memset (elf_sym_hashes (abfd), 0,
 	      extsymcount * sizeof (struct elf_link_hash_entry *));
@@ -4535,8 +4544,7 @@ error_free_dyn:
 
       /* Make a special call to the linker "notice" function to
 	 tell it that symbols added for crefs may need to be removed.  */
-      if (!(*info->callbacks->notice) (info, NULL, abfd, NULL,
-				       notice_not_needed, 0, NULL))
+      if (!(*bed->notice_as_needed) (abfd, info, notice_not_needed))
 	goto error_free_vers;
 
       free (old_tab);
@@ -4549,8 +4557,7 @@ error_free_dyn:
 
   if (old_tab != NULL)
     {
-      if (!(*info->callbacks->notice) (info, NULL, abfd, NULL,
-				       notice_needed, 0, NULL))
+      if (!(*bed->notice_as_needed) (abfd, info, notice_needed))
 	goto error_free_vers;
       free (old_tab);
       old_tab = NULL;
@@ -11972,7 +11979,9 @@ elf_gc_sweep (bfd *abfd, struct bfd_link_info *info)
 	     info we collected before.  */
 	  if (gc_sweep_hook
 	      && (o->flags & SEC_RELOC) != 0
-	      && o->reloc_count > 0
+	      && o->reloc_count != 0
+	      && !((info->strip == strip_all || info->strip == strip_debugger)
+		   && (o->flags & SEC_DEBUGGING) != 0)
 	      && !bfd_is_abs_section (o->output_section))
 	    {
 	      Elf_Internal_Rela *internal_relocs;

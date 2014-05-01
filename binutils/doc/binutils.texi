@@ -325,12 +325,15 @@ operation; new members are always placed at the end of the archive.
 
 The modifier @samp{v} makes @command{ar} list each file as it is appended.
 
-Since the point of this operation is speed, the archive's symbol table
-index is not updated, even if it already existed; you can use @samp{ar s} or
-@command{ranlib} explicitly to update the symbol table index.
+Since the point of this operation is speed, implementations of
+@command{ar} have the option of not updating the archive's symbol
+table if one exists.  Too many different systems however assume that
+symbol tables are always up-to-date, so @sc{gnu} @command{ar} will
+rebuild the table even with a quick append.
 
-However, too many different systems assume quick append rebuilds the
-index, so @sc{gnu} @command{ar} implements @samp{q} as a synonym for @samp{r}.
+Note - @sc{gnu} @command{ar} treats the command @samp{qs} as a
+synonym for @samp{r} - replacing already existing files in the
+archive and appending new ones at the end.
 
 @item r
 @cindex replacement in archive
@@ -804,6 +807,9 @@ symbol which if referenced by a relocation does not evaluate to its
 address, but instead must be invoked at runtime.  The runtime
 execution will then return the value to be used in the relocation.
 
+@item I
+The symbol is an indirect reference to another symbol.
+
 @item N
 The symbol is a debugging symbol.
 
@@ -1015,10 +1021,9 @@ both size and value to be printed.
 @item --special-syms
 Display symbols which have a target-specific special meaning.  These
 symbols are usually used by the target for some special processing and
-are not normally helpful when included included in the normal symbol
-lists.  For example for ARM targets this option would skip the mapping
-symbols used to mark transitions between ARM code, THUMB code and
-data.
+are not normally helpful when included in the normal symbol lists.
+For example for ARM targets this option would skip the mapping symbols
+used to mark transitions between ARM code, THUMB code and data.
 
 @item --synthetic
 Include synthetic symbols in the output.  These are special symbols
@@ -2471,8 +2476,10 @@ Operate in @emph{deterministic} mode.  The symbol map archive member's
 header will show zero for the UID, GID, and timestamp.  When this
 option is used, multiple runs will produce identical output files.
 
-This is the default unless @file{binutils} was configured with
-@option{--enable-deterministic-archives}.
+If @file{binutils} was configured with
+@option{--enable-deterministic-archives}, then this mode is on by
+default.  It can be disabled with the @samp{-U} option, described
+below.
 
 @item -t
 Update the timestamp of the symbol map of an archive.
@@ -2484,8 +2491,10 @@ Do @emph{not} operate in @emph{deterministic} mode.  This is the
 inverse of the @samp{-D} option, above: the archive index will get
 actual UID, GID, timestamp, and file mode values.
 
-This is the default unless @file{binutils} was configured with
-@option{--enable-deterministic-archives}.
+If @file{binutils} was configured @emph{without}
+@option{--enable-deterministic-archives}, then this mode is on by
+default.
+
 @end table
 
 @c man end

@@ -551,6 +551,13 @@ class Object
   output_section(unsigned int shndx) const
   { return this->do_output_section(shndx); }
 
+  // Given a section index, return its address.
+  // The return value will be -1U if the section is specially mapped,
+  // such as a merge section.
+  uint64_t
+  output_section_address(unsigned int shndx)
+  { return this->do_output_section_address(shndx); }
+
   // Given a section index, return the offset in the Output_section.
   // The return value will be -1U if the section is specially mapped,
   // such as a merge section.
@@ -850,6 +857,11 @@ class Object
   // by child class.
   virtual Output_section*
   do_output_section(unsigned int) const
+  { gold_unreachable(); }
+
+  // Get the address of a section--implemented by child class.
+  virtual uint64_t
+  do_output_section_address(unsigned int)
   { gold_unreachable(); }
 
   // Get the offset of a section--implemented by child class.
@@ -1166,7 +1178,7 @@ class Relobj : public Object
     return this->output_sections_[shndx] != NULL;
   }
 
-  // The the output section of the input section with index SHNDX.
+  // The output section of the input section with index SHNDX.
   // This is only used currently to remove a section from the link in
   // relaxation.
   void
@@ -1928,6 +1940,10 @@ class Sized_relobj : public Relobj
   std::vector<Address>&
   section_offsets()
   { return this->section_offsets_; }
+
+  // Get the address of an output section.
+  uint64_t
+  do_output_section_address(unsigned int shndx);
 
   // Get the offset of a section.
   uint64_t

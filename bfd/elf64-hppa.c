@@ -2524,6 +2524,8 @@ elf64_hppa_finish_dynamic_sections (bfd *output_bfd,
 		 area at the start of the .data section.  So all we have to
 		 to is find the start of the .data section.  */
 	      s = bfd_get_section_by_name (output_bfd, ".data");
+	      if (!s)
+		return FALSE;
 	      dyn.d_un.d_ptr = s->vma;
 	      bfd_elf64_swap_dyn_out (output_bfd, &dyn, dyncon);
 	      break;
@@ -3275,7 +3277,7 @@ elf_hppa_final_link_relocate (Elf_Internal_Rela *rel,
 	    && value + addend + max_branch_offset >= 2*max_branch_offset)
 	  {
 	    (*_bfd_error_handler)
-	      (_("%B(%A+0x" BFD_VMA_FMT "x): cannot reach %s"),
+	      (_("%B(%A+0x%" BFD_VMA_FMT "x): cannot reach %s"),
 	      input_bfd,
 	      input_section,
 	      offset,

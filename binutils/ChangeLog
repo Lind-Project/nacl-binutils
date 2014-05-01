@@ -1,3 +1,161 @@
+2013-12-10  Roland McGrath  <mcgrathr@google.com>
+
+	* Makefile.am (install-exec-local): Prefix libtool invocation with
+	$(INSTALL_PROGRAM_ENV).
+	* Makefile.in: Regenerate.
+
+2013-11-22  Cory Fields  <cory@coryfields.com>
+
+	* windres.c (define_resource): Use zero for timestamp, making
+	output deterministic. time.h include is no longer needed.
+	* resres.c (res_append_resource): Likewise.
+
+2013-11-15  Alan Modra  <amodra@gmail.com>
+
+	Apply changes from mainline to 2.24
+	2013-10-30  Alan Modra  <amodra@gmail.com>
+	* readelf.c (get_ppc_dynamic_type): Replace PPC_TLSOPT with PPC_OPT.
+	(get_ppc64_dynamic_type): Replace PPC64_TLSOPT with PPC64_OPT.
+
+	2013-10-30  Ulrich Weigand  <uweigand@de.ibm.com>
+	* readelf.c (get_ppc64_symbol_other): New function.
+	(get_symbol_other): Use it for EM_PPC64.
+
+	2013-10-30  Alan Modra  <amodra@gmail.com>
+	* readelf.c (get_machine_flags): Display ABI version for EM_PPC64.
+
+2013-11-07  Roland McGrath  <mcgrathr@google.com>
+
+	* objdump.c (dump_dwarf): Grok bfd_mach_x86_64_nacl and
+	bfd_mach_x64_32_nacl as equivalent to bfd_mach_x86_64.
+
+2013-10-31  Nick Clifton  <nickc@redhat.com>
+
+	* nm.c (display_rel_file): Treat bfd_error_no_symbols as
+	non-fatal.
+
+2013-10-12  H.J. Lu  <hongjiu.lu@intel.com>
+
+	* dwarf.c (display_debug_frames): Pass offset_size to
+	print_dwarf_vma for cie_id.
+
+2013-10-11  Roland McGrath  <mcgrathr@google.com>
+
+	* winduni.c (languages): Use \345 (octal syntax) rather than
+	literal non-ASCII/non-UTF8 character in string literal.
+
+2013-10-11  Roland McGrath  <mcgrathr@google.com>
+
+	* readelf.c (print_dynamic_symbol): Use array subscript syntax
+	rather than addition syntax with string literal.
+
+2013-10-09  Nick Clifton  <nickc@redhat.com>
+
+	* dwarf.c (add64): New function.
+	(read_and_display_attr_value): Add CU offset in to the value
+	displayed for a DW_AT_ref8 attribute.
+
+2013-09-20  Alan Modra  <amodra@gmail.com>
+
+	* configure: Regenerate.
+
+2013-09-18  Tristan Gingold  <gingold@adacore.com>
+
+	* NEWS: Add marker for 2.24.
+
+2013-09-18  Tristan Gingold  <gingold@adacore.com>
+
+	* Makefile.am (LEXLIB): Define.  Replase references to @LEXLIB@
+	by $(LEXLIB).
+	* Makefile.in: Regenerate.
+
+2013-09-17  Doug Gilmore  <Doug.Gilmore@imgtec.com>
+
+	* readelf.c (get_machine_flags): Handle EF_MIPS_FP64.
+
+2013-09-12  Nick Clifton  <nickc@redhat.com>
+
+	* dwarf.c (dwarf_vmatoa): Rename to dwarf_vmatoa_1 and add a
+	precision parameter.
+	(dwarf_vmatoa): New wrapper for dwarf_vmatoa_1.
+	(print_dwarf_vma): Use dwarf_vmatoa_1.
+	(SAFE_BYTE_GET): Add check that VAL is big enough to contain
+	AMOUNT bytes.
+	(process_debug_info): Use an unsigned int for the offset size.
+	(process_debug_pubnames): Likewise.
+	(display_debug_aranges): Likewise.
+	(struct Frame_Chunk): Use dwarf_vma type for pc_begin and pc_range
+	fields.
+	(frame_display_row): Use print_dwarf_vma to display dwarf_vma
+	values.
+	(display_debug_frames): Likewise.
+
+2013-09-10  Nick Clifton  <nickc@redhat.com>
+
+	* dwarf.c (display_debug_frames): Check for DW64_CIE_ID when
+	parsing 64-bit frames.
+
+2013-08-27  Nick Clifton  <nickc@redhat.com>
+
+	PR binutils/15796
+	* ar.c (map_over_members): Correctly handle multiple same-name
+	entries on the command line and in the archive.
+
+2013-08-23  H.J. Lu  <hongjiu.lu@intel.com>
+
+	* doc/binutils.texi: Remove the extra space.
+
+2013-08-23  Mikael Pettersson  <mikpe@it.uu.se>
+
+	PR binutils/15779
+	* doc/binutils.texi (ranlib -D): Correct description.
+	PR binutils/15777
+	(nm --special-syms): Fix typo.
+
+2013-08-23  Nick Clifton  <nickc@redhat.com>
+
+	PR binutils/15798
+	* doc/binutils.texi (ar cmdline): Update description of 'q'
+	command.
+
+	PR binutils/14136
+	(nm): Add description of 'I' symbol type.
+
+2013-08-23  Yuri Chornoivan  <yurchor@ukr.net>
+
+	PR binutils/15834
+	* od-xcoff.c: Fix typos.
+
+2013-08-19  Tristan Gingold  <gingold@adacore.com>
+
+	* nm.c (print_size_symbols): Directly get symbol size.
+
+2013-08-12  Andreas Schwab  <schwab@suse.de>
+
+	PR binutils/15818
+	* objdump.c (disassemble_section): Return early if nothing from
+	this section needs to be disassembled.
+
+2013-08-09  Nick Clifton  <nickc@redhat.com>
+
+	* readelf.c (get_machine_flags): Handle RL78 G10 flag.
+
+2013-07-26  Sergey Guriev  <sergey.s.guriev@intel.com>
+	    Alexander Ivchenko  <alexander.ivchenko@intel.com>
+	    Maxim Kuznetsov  <maxim.kuznetsov@intel.com>
+	    Sergey Lega  <sergey.s.lega@intel.com>
+	    Anna Tikhonova  <anna.tikhonova@intel.com>
+	    Ilya Tocar  <ilya.tocar@intel.com>
+	    Andrey Turetskiy  <andrey.turetskiy@intel.com>
+	    Ilya Verbin  <ilya.verbin@intel.com>
+	    Kirill Yukhin  <kirill.yukhin@intel.com>
+	    Michael Zolotukhin  <michael.v.zolotukhin@intel.com>
+
+	* dwarf.c (dwarf_regnames_i386): Add k0-k7 registers and
+	numeration in comments.
+	(dwarf_regnames_x86_64): Add xmm16-31 and k0-k7 registers to
+	dwarf table.
+
 2013-07-19  Nick Clifton  <nickc@redhat.com>
 
 	PR binutils/15745

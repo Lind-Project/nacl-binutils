@@ -1,6 +1,7 @@
 // dwarf_reader.h -- parse dwarf2/3 debug information for gold  -*- C++ -*-
 
-// Copyright 2007, 2008, 2009, 2010, 2011, 2012 Free Software Foundation, Inc.
+// Copyright 2007, 2008, 2009, 2010, 2011, 2012, 2013
+// Free Software Foundation, Inc.
 // Written by Ian Lance Taylor <iant@google.com>.
 
 // This file is part of gold.
@@ -400,7 +401,7 @@ class Dwarf_pubnames_table
   Dwarf_pubnames_table(Dwarf_info_reader* dwinfo, bool is_pubtypes)
     : dwinfo_(dwinfo), buffer_(NULL), buffer_end_(NULL), owns_buffer_(false),
       offset_size_(0), pinfo_(NULL), is_pubtypes_(is_pubtypes),
-      output_section_offset_(0)
+      output_section_offset_(0), unit_length_(0), cu_offset_(0)
   { }
 
   ~Dwarf_pubnames_table()
@@ -409,13 +410,26 @@ class Dwarf_pubnames_table
       delete[] this->buffer_;
   }
 
-  // Read the pubnames section SHNDX from the object file.
+  // Read the pubnames section from the object file, using the symbol
+  // table for relocating it.
   bool
-  read_section(Relobj* object, unsigned int shndx);
+  read_section(Relobj* object, const unsigned char* symbol_table,
+               off_t symtab_size);
 
   // Read the header for the set at OFFSET.
   bool
   read_header(off_t offset);
+
+  // Return the offset to the cu within the info or types section.
+  off_t
+  cu_offset()
+  { return this->cu_offset_; }
+
+  // Return the size of this subsection of the table.  The unit length
+  // doesn't include the size of its own field.
+  off_t
+  subsection_size()
+  { return this->unit_length_; }
 
   // Read the next name from the set.
   const char*
@@ -440,6 +454,15 @@ class Dwarf_pubnames_table
   // relocated data will be relative to the output section, and need
   // to be corrected before reading data from the input section.
   uint64_t output_section_offset_;
+  // Fields read from the header.
+  uint64_t unit_length_;
+  off_t cu_offset_;
+
+  // Track relocations for this table so we can find the CUs that
+  // correspond to the subsections.
+  Elf_reloc_mapper* reloc_mapper_;
+  // Type of the relocation section (SHT_REL or SHT_RELA).
+  unsigned int reloc_type_;
 };
 
 // This class represents a DWARF Debug Info Entry (DIE).
@@ -675,8 +698,8 @@ class Dwarf_info_reader
       symtab_size_(symtab_size), shndx_(shndx), reloc_shndx_(reloc_shndx),
       reloc_type_(reloc_type), abbrev_shndx_(0), string_shndx_(0),
       buffer_(NULL), buffer_end_(NULL), cu_offset_(0), cu_length_(0),
-      offset_size_(0), address_size_(0), cu_version_(0), type_signature_(0),
-      type_offset_(0), abbrev_table_(), ranges_table_(this),
+      offset_size_(0), address_size_(0), cu_version_(0),
+      abbrev_table_(), ranges_table_(this),
       reloc_mapper_(NULL), string_buffer_(NULL), string_buffer_end_(NULL),
       owns_string_buffer_(false), string_output_section_offset_(0)
   { }
@@ -747,6 +770,21 @@ class Dwarf_info_reader
   set_abbrev_shndx(unsigned int abbrev_shndx)
   { this->abbrev_shndx_ = abbrev_shndx; }
 
+  // Return a pointer to the object file's ELF symbol table.
+  const unsigned char*
+  symtab() const
+  { return this->symtab_; }
+
+  // Return the size of the object file's ELF symbol table.
+  off_t
+  symtab_size() const
+  { return this->symtab_size_; }
+
+  // Return the offset of the current compilation unit.
+  off_t
+  cu_offset() const
+  { return this->cu_offset_; }
+
  protected:
   // Begin parsing the debug info.  This calls visit_compilation_unit()
   // or visit_type_unit() for each compilation or type unit found in the
@@ -765,8 +803,8 @@ class Dwarf_info_reader
 
   // Visit a type unit.
   virtual void
-  visit_type_unit(off_t tu_offset, off_t tu_length, off_t type_offset,
-		  uint64_t signature, Dwarf_die* root_die);
+  visit_type_unit(off_t tu_offset, off_t type_offset, uint64_t signature,
+		  Dwarf_die* root_die);
 
   // Read the range table.
   Dwarf_range_list*
@@ -784,16 +822,6 @@ class Dwarf_info_reader
   Relobj*
   object() const
   { return this->object_; }
-
-  // Return a pointer to the object file's ELF symbol table.
-  const unsigned char*
-  symtab() const
-  { return this->symtab_; }
-
-  // Return the size of the object file's ELF symbol table.
-  off_t
-  symtab_size() const
-  { return this->symtab_size_; }
 
   // Checkpoint the relocation tracker.
   uint64_t
@@ -868,10 +896,6 @@ class Dwarf_info_reader
   unsigned int address_size_;
   // Compilation unit version number.
   unsigned int cu_version_;
-  // Type signature (for a type unit).
-  uint64_t type_signature_;
-  // Offset from the type unit header to the type DIE (for a type unit).
-  off_t type_offset_;
   // Abbreviations table for current compilation unit.
   Dwarf_abbrev_table abbrev_table_;
   // Ranges table for the current compilation unit.

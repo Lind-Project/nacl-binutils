@@ -396,7 +396,7 @@ class Target_x86_64 : public Sized_target<size, false>
       got_(NULL), plt_(NULL), got_plt_(NULL), got_irelative_(NULL),
       got_tlsdesc_(NULL), global_offset_table_(NULL), rela_dyn_(NULL),
       rela_irelative_(NULL), copy_relocs_(elfcpp::R_X86_64_COPY),
-      dynbss_(NULL), got_mod_index_offset_(-1U), tlsdesc_reloc_info_(),
+      got_mod_index_offset_(-1U), tlsdesc_reloc_info_(),
       tls_base_symbol_defined_(false)
   { }
 
@@ -972,8 +972,6 @@ class Target_x86_64 : public Sized_target<size, false>
   Reloc_section* rela_irelative_;
   // Relocs saved to avoid a COPY reloc.
   Copy_relocs<elfcpp::SHT_RELA, size, false> copy_relocs_;
-  // Space for variables copied with a COPY reloc.
-  Output_data_space* dynbss_;
   // Offset of the GOT entry for the TLS module index.
   unsigned int got_mod_index_offset_;
   // We handle R_X86_64_TLSDESC against a local symbol as a target
@@ -1007,7 +1005,8 @@ const Target::Target_info Target_x86_64<64>::x86_64_info =
   0,			// small_common_section_flags
   elfcpp::SHF_X86_64_LARGE,	// large_common_section_flags
   NULL,			// attributes_section
-  NULL			// attributes_vendor
+  NULL,			// attributes_vendor
+  "_start"		// entry_symbol_name
 };
 
 template<>
@@ -1033,7 +1032,8 @@ const Target::Target_info Target_x86_64<32>::x86_64_info =
   0,			// small_common_section_flags
   elfcpp::SHF_X86_64_LARGE,	// large_common_section_flags
   NULL,			// attributes_section
-  NULL			// attributes_vendor
+  NULL,			// attributes_vendor
+  "_start"		// entry_symbol_name
 };
 
 // This is called when a new output section is created.  This is where
@@ -2113,12 +2113,14 @@ Target_x86_64<size>::Scan::get_reference_flags(unsigned int r_type)
 
     case elfcpp::R_X86_64_PC64:
     case elfcpp::R_X86_64_PC32:
+    case elfcpp::R_X86_64_PC32_BND:
     case elfcpp::R_X86_64_PC16:
     case elfcpp::R_X86_64_PC8:
     case elfcpp::R_X86_64_GOTOFF64:
       return Symbol::RELATIVE_REF;
 
     case elfcpp::R_X86_64_PLT32:
+    case elfcpp::R_X86_64_PLT32_BND:
     case elfcpp::R_X86_64_PLTOFF64:
       return Symbol::FUNCTION_CALL | Symbol::RELATIVE_REF;
 
@@ -2200,6 +2202,7 @@ Target_x86_64<size>::Scan::check_non_pic(Relobj* object, unsigned int r_type,
 
       // glibc supports these reloc types, but they can overflow.
     case elfcpp::R_X86_64_PC32:
+    case elfcpp::R_X86_64_PC32_BND:
       // A PC relative reference is OK against a local symbol or if
       // the symbol is defined locally.
       if (gsym == NULL
@@ -2219,12 +2222,28 @@ Target_x86_64<size>::Scan::check_non_pic(Relobj* object, unsigned int r_type,
 	object->error(_("requires dynamic R_X86_64_32 reloc which may "
 			"overflow at runtime; recompile with -fPIC"));
       else
-	object->error(_("requires dynamic %s reloc against '%s' which may "
-			"overflow at runtime; recompile with -fPIC"),
-		      (r_type == elfcpp::R_X86_64_32
-		       ? "R_X86_64_32"
-		       : "R_X86_64_PC32"),
-		      gsym->name());
+	{
+	  const char *r_name;
+	  switch (r_type)
+	    {
+	    case elfcpp::R_X86_64_32:
+	      r_name = "R_X86_64_32";
+	      break;
+	    case elfcpp::R_X86_64_PC32:
+	      r_name = "R_X86_64_PC32";
+	      break;
+	    case elfcpp::R_X86_64_PC32_BND:
+	      r_name = "R_X86_64_PC32_BND";
+	      break;
+	    default:
+	      gold_unreachable();
+	      break;
+	    }
+	  object->error(_("requires dynamic %s reloc against '%s' "
+			  "which may overflow at runtime; recompile "
+			  "with -fPIC"),
+			r_name, gsym->name());
+	}
       this->issued_non_pic_error_ = true;
       return;
 
@@ -2368,11 +2387,13 @@ Target_x86_64<size>::Scan::local(Symbol_table* symtab,
 
     case elfcpp::R_X86_64_PC64:
     case elfcpp::R_X86_64_PC32:
+    case elfcpp::R_X86_64_PC32_BND:
     case elfcpp::R_X86_64_PC16:
     case elfcpp::R_X86_64_PC8:
       break;
 
     case elfcpp::R_X86_64_PLT32:
+    case elfcpp::R_X86_64_PLT32_BND:
       // Since we know this is a local symbol, we can handle this as a
       // PC32 reloc.
       break;
@@ -2740,7 +2761,8 @@ Target_x86_64<size>::Scan::global(Symbol_table* symtab,
 						       reloc.get_r_offset(),
 						       reloc.get_r_addend());
 	      }
-	    else if (r_type == elfcpp::R_X86_64_64
+	    else if (((size == 64 && r_type == elfcpp::R_X86_64_64)
+		      || (size == 32 && r_type == elfcpp::R_X86_64_32))
 		     && gsym->can_use_relative_reloc(false))
 	      {
 		Reloc_section* rela_dyn = target->rela_dyn_section(layout);
@@ -2764,6 +2786,7 @@ Target_x86_64<size>::Scan::global(Symbol_table* symtab,
 
     case elfcpp::R_X86_64_PC64:
     case elfcpp::R_X86_64_PC32:
+    case elfcpp::R_X86_64_PC32_BND:
     case elfcpp::R_X86_64_PC16:
     case elfcpp::R_X86_64_PC8:
       {
@@ -2868,6 +2891,7 @@ Target_x86_64<size>::Scan::global(Symbol_table* symtab,
       break;
 
     case elfcpp::R_X86_64_PLT32:
+    case elfcpp::R_X86_64_PLT32_BND:
       // If the symbol is fully resolved, this is just a PC32 reloc.
       // Otherwise we need a PLT entry.
       if (gsym->final_value_is_known())
@@ -3216,6 +3240,8 @@ Target_x86_64<size>::Relocate::relocate(
   if (this->skip_call_tls_get_addr_)
     {
       if ((r_type != elfcpp::R_X86_64_PLT32
+	   && r_type != elfcpp::R_X86_64_PLT32_BND
+	   && r_type != elfcpp::R_X86_64_PC32_BND
 	   && r_type != elfcpp::R_X86_64_PC32)
 	  || gsym == NULL
 	  || strcmp(gsym->name(), "__tls_get_addr") != 0)
@@ -3319,6 +3345,7 @@ Target_x86_64<size>::Relocate::relocate(
       break;
 
     case elfcpp::R_X86_64_PC32:
+    case elfcpp::R_X86_64_PC32_BND:
       Relocate_functions<size, false>::pcrela32(view, object, psymval, addend,
 						address);
       break;
@@ -3342,6 +3369,7 @@ Target_x86_64<size>::Relocate::relocate(
       break;
 
     case elfcpp::R_X86_64_PLT32:
+    case elfcpp::R_X86_64_PLT32_BND:
       gold_assert(gsym == NULL
 		  || gsym->has_plt_offset()
 		  || gsym->final_value_is_known()
@@ -4150,7 +4178,9 @@ Target_x86_64<size>::Relocatable_size_for_reloc::get_size_for_reloc(
     case elfcpp::R_X86_64_32:
     case elfcpp::R_X86_64_32S:
     case elfcpp::R_X86_64_PC32:
+    case elfcpp::R_X86_64_PC32_BND:
     case elfcpp::R_X86_64_PLT32:
+    case elfcpp::R_X86_64_PLT32_BND:
     case elfcpp::R_X86_64_GOTPC32:
     case elfcpp::R_X86_64_GOT32:
       return 4;
@@ -4570,6 +4600,9 @@ class Target_x86_64_nacl : public Target_x86_64<size>
 						 plt_count);
   }
 
+  virtual std::string
+  do_code_fill(section_size_type length) const;
+
  private:
   static const Target::Target_info x86_64_nacl_info;
 };
@@ -4597,7 +4630,8 @@ const Target::Target_info Target_x86_64_nacl<64>::x86_64_nacl_info =
   0,			// small_common_section_flags
   elfcpp::SHF_X86_64_LARGE,	// large_common_section_flags
   NULL,			// attributes_section
-  NULL			// attributes_vendor
+  NULL,			// attributes_vendor
+  "_start"		// entry_symbol_name
 };
 
 template<>
@@ -4623,7 +4657,8 @@ const Target::Target_info Target_x86_64_nacl<32>::x86_64_nacl_info =
   0,			// small_common_section_flags
   elfcpp::SHF_X86_64_LARGE,	// large_common_section_flags
   NULL,			// attributes_section
-  NULL			// attributes_vendor
+  NULL,			// attributes_vendor
+  "_start"		// entry_symbol_name
 };
 
 #define	NACLMASK	0xe0            // 32-byte alignment mask.
@@ -4643,7 +4678,7 @@ Output_data_plt_x86_64_nacl<size>::first_plt_entry[plt_entry_size] =
   0x41, 0xff, 0xe3,                   // jmpq *%r11
 
   // 9-byte nop sequence to pad out to the next 32-byte boundary.
-  0x2e, 0x0f, 0x1f, 0x84, 0, 0, 0, 0, 0, // nopl %cs:0x0(%rax,%rax,1)
+  0x66, 0x0f, 0x1f, 0x84, 0, 0, 0, 0, 0, // nopw 0x0(%rax,%rax,1)
 
   // 32 bytes of nop to pad out to the standard size
   0x66, 0x66, 0x66, 0x66, 0x66, 0x66,    // excess data32 prefixes
@@ -4793,6 +4828,16 @@ Output_data_plt_x86_64_nacl<size>::plt_eh_frame_fde[plt_eh_frame_fde_size] =
   elfcpp::DW_CFA_nop,			// Align to 32 bytes.
   elfcpp::DW_CFA_nop
 };
+
+// Return a string used to fill a code section with nops.
+// For NaCl, long NOPs are only valid if they do not cross
+// bundle alignment boundaries, so keep it simple with one-byte NOPs.
+template<int size>
+std::string
+Target_x86_64_nacl<size>::do_code_fill(section_size_type length) const
+{
+  return std::string(length, static_cast<char>(0x90));
+}
 
 // The selector for x86_64-nacl object files.
 

@@ -139,52 +139,27 @@ get_encoded_value (unsigned char *data,
   return val;
 }
 
-/* Print a dwarf_vma value (typically an address, offset or length) in
-   hexadecimal format, followed by a space.  The length of the value (and
-   hence the precision displayed) is determined by the byte_size parameter.  */
-
-static void
-print_dwarf_vma (dwarf_vma val, unsigned byte_size)
-{
-  static char buff[18];
-  int offset = 0;
-
-  /* Printf does not have a way of specifiying a maximum field width for an
-     integer value, so we print the full value into a buffer and then select
-     the precision we need.  */
 #if __STDC_VERSION__ >= 199901L || (defined(__GNUC__) && __GNUC__ >= 2)
 #ifndef __MINGW32__
-  snprintf (buff, sizeof (buff), "%16.16llx ", val);
+#define  DWARF_VMA_FMT       "ll"
+#define  DWARF_VMA_FMT_LONG  "%16.16llx"
 #else
-  snprintf (buff, sizeof (buff), "%016I64x ", val);
+#define  DWARF_VMA_FMT       "I64"
+#define  DWARF_VMA_FMT_LONG  "%016I64x"
 #endif
 #else
-  snprintf (buff, sizeof (buff), "%16.16lx ", val);
+#define  DWARF_VMA_FMT       "l"
+#define  DWARF_VMA_FMT_LONG  "%16.16lx"
 #endif
 
-  if (byte_size != 0)
-    {
-      if (byte_size > 0 && byte_size <= 8)
-	offset = 16 - 2 * byte_size;
-      else
-	error (_("Wrong size in print_dwarf_vma"));
-    }
-
-  fputs (buff + offset, stdout);
-}
-
-#if __STDC_VERSION__ >= 199901L || (defined(__GNUC__) && __GNUC__ >= 2)
-#ifndef __MINGW32__
-#define  DWARF_VMA_FMT "ll"
-#else
-#define  DWARF_VMA_FMT "I64"
-#endif
-#else
-#define  DWARF_VMA_FMT "l"
-#endif
+/* Convert a dwarf vma value into a string.  Returns a pointer to a static
+   buffer containing the converted VALUE.  The value is converted according
+   to the printf formating character FMTCH.  If NUM_BYTES is non-zero then
+   it specifies the maximum number of bytes to be displayed in the converted
+   value and FMTCH is ignored - hex is always used.  */
 
 static const char *
-dwarf_vmatoa (const char *fmtch, dwarf_vma value)
+dwarf_vmatoa_1 (const char *fmtch, dwarf_vma value, unsigned num_bytes)
 {
   /* As dwarf_vmatoa is used more then once in a printf call
      for output, we are cycling through an fixed array of pointers
@@ -194,17 +169,45 @@ dwarf_vmatoa (const char *fmtch, dwarf_vma value)
   {
     char place[64];
   } buf[16];
-  char fmt[32];
   char *ret;
-
-  sprintf (fmt, "%%%s%s", DWARF_VMA_FMT, fmtch);
 
   ret = buf[buf_pos++].place;
   buf_pos %= ARRAY_SIZE (buf);
 
-  snprintf (ret, sizeof (buf[0].place), fmt, value);
+  if (num_bytes)
+    {
+      /* Printf does not have a way of specifiying a maximum field width for an
+	 integer value, so we print the full value into a buffer and then select
+	 the precision we need.  */
+      snprintf (ret, sizeof (buf[0].place), DWARF_VMA_FMT_LONG, value);
+      if (num_bytes > 8)
+	num_bytes = 8;
+      return ret + (16 - 2 * num_bytes);
+    }
+  else
+    {
+      char fmt[32];
 
-  return ret;
+      sprintf (fmt, "%%%s%s", DWARF_VMA_FMT, fmtch);
+      snprintf (ret, sizeof (buf[0].place), fmt, value);
+      return ret;
+    }
+}
+
+static inline const char *
+dwarf_vmatoa (const char * fmtch, dwarf_vma value)
+{
+  return dwarf_vmatoa_1 (fmtch, value, 0);
+}
+
+/* Print a dwarf_vma value (typically an address, offset or length) in
+   hexadecimal format, followed by a space.  The length of the VALUE (and
+   hence the precision displayed) is determined by the NUM_BYTES parameter.  */
+
+static void
+print_dwarf_vma (dwarf_vma value, unsigned num_bytes)
+{
+  printf ("%s ", dwarf_vmatoa_1 (NULL, value, num_bytes));
 }
 
 /* Format a 64-bit value, given as two 32-bit values, in hex.
@@ -285,6 +288,7 @@ read_uleb128 (unsigned char * data,
 #define SAFE_BYTE_GET(VAL, PTR, AMOUNT, END)	\
   do						\
     {						\
+      int dummy [sizeof (VAL) < (AMOUNT) ? -1 : 1] ATTRIBUTE_UNUSED ; \
       unsigned int amount = (AMOUNT);		\
       if (((PTR) + amount) >= (END))		\
 	{					\
@@ -810,7 +814,7 @@ static const char *
 get_FORM_name (unsigned long form)
 {
   const char *name;
-  
+
   if (form == 0)
     return "DW_FORM value: 0";
 
@@ -1421,6 +1425,34 @@ find_cu_tu_set_v2 (dwarf_vma cu_offset, int do_types)
   return NULL;
 }
 
+/* Add INC to HIGH_BITS:LOW_BITS.  */
+static void
+add64 (dwarf_vma * high_bits, dwarf_vma * low_bits, dwarf_vma inc)
+{
+  dwarf_vma tmp = * low_bits;
+
+  tmp += inc;
+
+  /* FIXME: There is probably a better way of handling this:
+
+     We need to cope with dwarf_vma being a 32-bit or 64-bit
+     type.  Plus regardless of its size LOW_BITS is meant to
+     only hold 32-bits, so if there is overflow or wrap around
+     we must propagate into HIGH_BITS.  */
+  if (tmp < * low_bits)
+    {
+      ++ * high_bits;
+    }
+  else if (sizeof (tmp) > 8
+	   && (tmp >> 31) > 1)
+    {
+      ++ * high_bits;
+      tmp &= 0xFFFFFFFF;
+    }
+
+  * low_bits = tmp;
+}
+
 static unsigned char *
 read_and_display_attr_value (unsigned long attribute,
 			     unsigned long form,
@@ -1566,12 +1598,15 @@ read_and_display_attr_value (unsigned long attribute,
       if (!do_loc)
 	{
 	  dwarf_vma high_bits;
+	  dwarf_vma utmp;
 	  char buf[64];
 
 	  SAFE_BYTE_GET64 (data, &high_bits, &uvalue, end);
-
+	  utmp = uvalue;
+	  if (form == DW_FORM_ref8)
+	    add64 (& high_bits, & utmp, cu_offset);
 	  printf (" 0x%s",
-		  dwarf_vmatoa64 (high_bits, uvalue, buf, sizeof (buf)));
+		  dwarf_vmatoa64 (high_bits, utmp, buf, sizeof (buf)));
 	}
 
       if ((do_loc || do_debug_loc || do_debug_ranges)
@@ -2192,7 +2227,7 @@ process_debug_info (struct dwarf_section *section,
       unsigned char *tags;
       int level, last_level, saved_level;
       dwarf_vma cu_offset;
-      int offset_size;
+      unsigned int offset_size;
       int initial_length_size;
       dwarf_vma signature_high = 0;
       dwarf_vma signature_low = 0;
@@ -3490,7 +3525,7 @@ display_debug_pubnames (struct dwarf_section *section,
     {
       unsigned char *data;
       unsigned long offset;
-      int offset_size, initial_length_size;
+      unsigned int offset_size, initial_length_size;
 
       data = start;
 
@@ -3773,7 +3808,7 @@ display_debug_macro (struct dwarf_section *section,
 	  dwarf_vma nargs, n;
 
 	  SAFE_BYTE_GET_AND_INC (count, curr, 1, end);
-	  
+
 	  memset (extended_op_buf, 0, sizeof (extended_op_buf));
 	  extended_ops = extended_op_buf;
 	  if (count)
@@ -4517,8 +4552,8 @@ display_debug_aranges (struct dwarf_section *section,
       dwarf_vma address;
       unsigned char address_size;
       int excess;
-      int offset_size;
-      int initial_length_size;
+      unsigned int offset_size;
+      unsigned int initial_length_size;
 
       hdrptr = start;
 
@@ -4889,8 +4924,8 @@ typedef struct Frame_Chunk
   char *augmentation;
   unsigned int code_factor;
   int data_factor;
-  unsigned long pc_begin;
-  unsigned long pc_range;
+  dwarf_vma pc_begin;
+  dwarf_vma pc_range;
   int cfa_reg;
   int cfa_offset;
   int ra;
@@ -4939,19 +4974,26 @@ frame_need_space (Frame_Chunk *fc, unsigned int reg)
 
 static const char *const dwarf_regnames_i386[] =
 {
-  "eax", "ecx", "edx", "ebx",
-  "esp", "ebp", "esi", "edi",
-  "eip", "eflags", NULL,
-  "st0", "st1", "st2", "st3",
-  "st4", "st5", "st6", "st7",
-  NULL, NULL,
-  "xmm0", "xmm1", "xmm2", "xmm3",
-  "xmm4", "xmm5", "xmm6", "xmm7",
-  "mm0", "mm1", "mm2", "mm3",
-  "mm4", "mm5", "mm6", "mm7",
-  "fcw", "fsw", "mxcsr",
-  "es", "cs", "ss", "ds", "fs", "gs", NULL, NULL,
-  "tr", "ldtr"
+  "eax", "ecx", "edx", "ebx",			  /* 0 - 3  */
+  "esp", "ebp", "esi", "edi",			  /* 4 - 7  */
+  "eip", "eflags", NULL,			  /* 8 - 10  */
+  "st0", "st1", "st2", "st3",			  /* 11 - 14  */
+  "st4", "st5", "st6", "st7",			  /* 15 - 18  */
+  NULL, NULL,					  /* 19 - 20  */
+  "xmm0", "xmm1", "xmm2", "xmm3",		  /* 21 - 24  */
+  "xmm4", "xmm5", "xmm6", "xmm7",		  /* 25 - 28  */
+  "mm0", "mm1", "mm2", "mm3",			  /* 29 - 32  */
+  "mm4", "mm5", "mm6", "mm7",			  /* 33 - 36  */
+  "fcw", "fsw", "mxcsr",			  /* 37 - 39  */
+  "es", "cs", "ss", "ds", "fs", "gs", NULL, NULL, /* 40 - 47  */
+  "tr", "ldtr",					  /* 48 - 49  */
+  NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, /* 50 - 57  */
+  NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, /* 58 - 65  */
+  NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, /* 66 - 73  */
+  NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, /* 74 - 81  */
+  NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, /* 82 - 89  */
+  NULL, NULL, NULL,				  /* 90 - 92  */
+  "k0", "k1", "k2", "k3", "k4", "k5", "k6", "k7"  /* 93 - 100  */
 };
 
 void
@@ -4980,7 +5022,17 @@ static const char *const dwarf_regnames_x86_64[] =
   "es", "cs", "ss", "ds", "fs", "gs", NULL, NULL,
   "fs.base", "gs.base", NULL, NULL,
   "tr", "ldtr",
-  "mxcsr", "fcw", "fsw"
+  "mxcsr", "fcw", "fsw",
+  "xmm16",  "xmm17",  "xmm18",  "xmm19",
+  "xmm20",  "xmm21",  "xmm22",  "xmm23",
+  "xmm24",  "xmm25",  "xmm26",  "xmm27",
+  "xmm28",  "xmm29",  "xmm30",  "xmm31",
+  NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, /* 83 - 90  */
+  NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, /* 91 - 98  */
+  NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, /* 99 - 106  */
+  NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, /* 107 - 114  */
+  NULL, NULL, NULL,				  /* 115 - 117  */
+  "k0", "k1", "k2", "k3", "k4", "k5", "k6", "k7"
 };
 
 void
@@ -5058,7 +5110,7 @@ frame_display_row (Frame_Chunk *fc, int *need_col_headers, int *max_regs)
       printf ("\n");
     }
 
-  printf ("%0*lx ", eh_addr_size * 2, fc->pc_begin);
+  print_dwarf_vma (fc->pc_begin, eh_addr_size);
   if (fc->cfa_exp)
     strcpy (tmp, "exp");
   else
@@ -5128,16 +5180,16 @@ display_debug_frames (struct dwarf_section *section,
     {
       unsigned char *saved_start;
       unsigned char *block_end;
-      unsigned long length;
-      unsigned long cie_id;
+      dwarf_vma length;
+      dwarf_vma cie_id;
       Frame_Chunk *fc;
       Frame_Chunk *cie;
       int need_col_headers = 1;
       unsigned char *augmentation_data = NULL;
       unsigned long augmentation_data_len = 0;
-      int encoded_ptr_size = saved_eh_addr_size;
-      int offset_size;
-      int initial_length_size;
+      unsigned int encoded_ptr_size = saved_eh_addr_size;
+      unsigned int offset_size;
+      unsigned int initial_length_size;
 
       saved_start = start;
 
@@ -5164,14 +5216,16 @@ display_debug_frames (struct dwarf_section *section,
       block_end = saved_start + length + initial_length_size;
       if (block_end > end)
 	{
-	  warn ("Invalid length %#08lx in FDE at %#08lx\n",
-		length, (unsigned long)(saved_start - section_start));
+	  warn ("Invalid length 0x%s in FDE at %#08lx\n",
+		dwarf_vmatoa_1 (NULL, length, offset_size),
+		(unsigned long) (saved_start - section_start));
 	  block_end = end;
 	}
 
       SAFE_BYTE_GET_AND_INC (cie_id, start, offset_size, end);
 
-      if (is_eh ? (cie_id == 0) : (cie_id == DW_CIE_ID))
+      if (is_eh ? (cie_id == 0) : ((offset_size == 4 && cie_id == DW_CIE_ID)
+				   || (offset_size == 8 && cie_id == DW64_CIE_ID)))
 	{
 	  int version;
 
@@ -5224,15 +5278,18 @@ display_debug_frames (struct dwarf_section *section,
 	    }
 	  cie = fc;
 
+	  printf ("\n%08lx ", (unsigned long) (saved_start - section_start));
+	  print_dwarf_vma (length, fc->ptr_size);
+	  print_dwarf_vma (cie_id, offset_size);
+
 	  if (do_debug_frames_interp)
-	    printf ("\n%08lx %08lx %08lx CIE \"%s\" cf=%d df=%d ra=%d\n",
-		    (unsigned long)(saved_start - section_start), length, cie_id,
-		    fc->augmentation, fc->code_factor, fc->data_factor,
-		    fc->ra);
+	    {
+	      printf ("CIE \"%s\" cf=%d df=%d ra=%d\n", fc->augmentation,
+		      fc->code_factor, fc->data_factor, fc->ra);
+	    }
 	  else
 	    {
-	      printf ("\n%08lx %08lx %08lx CIE\n",
-		      (unsigned long)(saved_start - section_start), length, cie_id);
+	      printf ("CIE\n");
 	      printf ("  Version:               %d\n", version);
 	      printf ("  Augmentation:          \"%s\"\n", fc->augmentation);
 	      if (version >= 4)
@@ -5299,8 +5356,9 @@ display_debug_frames (struct dwarf_section *section,
 
 	  if (!cie)
 	    {
-	      warn ("Invalid CIE pointer %#08lx in FDE at %#08lx\n",
-		    cie_id, (unsigned long)(saved_start - section_start));
+	      warn ("Invalid CIE pointer 0x%s in FDE at %#08lx\n",
+		    dwarf_vmatoa_1 (NULL, cie_id, offset_size),
+		    (unsigned long) (saved_start - section_start));
 	      fc->ncols = 0;
 	      fc->col_type = (short int *) xmalloc (sizeof (short int));
 	      fc->col_offset = (int *) xmalloc (sizeof (int));
@@ -5347,7 +5405,7 @@ display_debug_frames (struct dwarf_section *section,
 	     run of the "objcopy on compressed debug sections" test for an
 	     example of this.  */
 	  SAFE_BYTE_GET_AND_INC (fc->pc_range, start, encoded_ptr_size, end);
-	  
+
 	  if (cie->augmentation[0] == 'z')
 	    {
 	      augmentation_data_len = LEB ();
@@ -5355,12 +5413,19 @@ display_debug_frames (struct dwarf_section *section,
 	      start += augmentation_data_len;
 	    }
 
-	  printf ("\n%08lx %08lx %08lx FDE cie=%08lx pc=",
-		  (unsigned long)(saved_start - section_start), length, cie_id,
+	  printf ("\n%08lx %s %s FDE cie=%08lx pc=",
+		  (unsigned long)(saved_start - section_start),
+		  dwarf_vmatoa_1 (NULL, length, fc->ptr_size),
+		  dwarf_vmatoa_1 (NULL, cie_id, offset_size),
 		  (unsigned long)(cie->chunk_start - section_start));
+
 	  if (fc->segment_size)
 	    printf ("%04lx:", segment_selector);
-	  printf ("%08lx..%08lx\n", fc->pc_begin, fc->pc_begin + fc->pc_range);
+
+	  printf ("%s..%s\n",
+		  dwarf_vmatoa_1 (NULL, fc->pc_begin, fc->ptr_size),
+		  dwarf_vmatoa_1 (NULL, fc->pc_begin + fc->pc_range, fc->ptr_size));
+
 	  if (! do_debug_frames_interp && augmentation_data_len)
 	    {
 	      unsigned long i;
@@ -5508,7 +5573,8 @@ display_debug_frames (struct dwarf_section *section,
 	{
 	  unsigned op, opa;
 	  unsigned long ul, reg, roffs;
-	  long l, ofs;
+	  long l;
+	  dwarf_vma ofs;
 	  dwarf_vma vma;
 	  const char *reg_prefix = "";
 
@@ -5525,9 +5591,11 @@ display_debug_frames (struct dwarf_section *section,
 	      if (do_debug_frames_interp)
 		frame_display_row (fc, &need_col_headers, &max_regs);
 	      else
-		printf ("  DW_CFA_advance_loc: %d to %08lx\n",
+		printf ("  DW_CFA_advance_loc: %d to %s\n",
 			opa * fc->code_factor,
-			fc->pc_begin + opa * fc->code_factor);
+			dwarf_vmatoa_1 (NULL, 
+					fc->pc_begin + opa * fc->code_factor,
+					fc->ptr_size));
 	      fc->pc_begin += opa * fc->code_factor;
 	      break;
 
@@ -5569,7 +5637,8 @@ display_debug_frames (struct dwarf_section *section,
 	      if (do_debug_frames_interp)
 		frame_display_row (fc, &need_col_headers, &max_regs);
 	      else
-		printf ("  DW_CFA_set_loc: %08lx\n", (unsigned long)vma);
+		printf ("  DW_CFA_set_loc: %s\n",
+			dwarf_vmatoa_1 (NULL, vma, fc->ptr_size));
 	      fc->pc_begin = vma;
 	      break;
 
@@ -5578,9 +5647,11 @@ display_debug_frames (struct dwarf_section *section,
 	      if (do_debug_frames_interp)
 		frame_display_row (fc, &need_col_headers, &max_regs);
 	      else
-		printf ("  DW_CFA_advance_loc1: %ld to %08lx\n",
-			ofs * fc->code_factor,
-			fc->pc_begin + ofs * fc->code_factor);
+		printf ("  DW_CFA_advance_loc1: %ld to %s\n",
+			(unsigned long) (ofs * fc->code_factor),
+			dwarf_vmatoa_1 (NULL,
+					fc->pc_begin + ofs * fc->code_factor,
+					fc->ptr_size));
 	      fc->pc_begin += ofs * fc->code_factor;
 	      break;
 
@@ -5589,9 +5660,11 @@ display_debug_frames (struct dwarf_section *section,
 	      if (do_debug_frames_interp)
 		frame_display_row (fc, &need_col_headers, &max_regs);
 	      else
-		printf ("  DW_CFA_advance_loc2: %ld to %08lx\n",
-			ofs * fc->code_factor,
-			fc->pc_begin + ofs * fc->code_factor);
+		printf ("  DW_CFA_advance_loc2: %ld to %s\n",
+			(unsigned long) (ofs * fc->code_factor),
+			dwarf_vmatoa_1 (NULL,
+					fc->pc_begin + ofs * fc->code_factor,
+					fc->ptr_size));
 	      fc->pc_begin += ofs * fc->code_factor;
 	      break;
 
@@ -5600,9 +5673,11 @@ display_debug_frames (struct dwarf_section *section,
 	      if (do_debug_frames_interp)
 		frame_display_row (fc, &need_col_headers, &max_regs);
 	      else
-		printf ("  DW_CFA_advance_loc4: %ld to %08lx\n",
-			ofs * fc->code_factor,
-			fc->pc_begin + ofs * fc->code_factor);
+		printf ("  DW_CFA_advance_loc4: %ld to %s\n",
+			(unsigned long) (ofs * fc->code_factor),
+			dwarf_vmatoa_1 (NULL,
+					fc->pc_begin + ofs * fc->code_factor,
+					fc->ptr_size));
 	      fc->pc_begin += ofs * fc->code_factor;
 	      break;
 
@@ -5863,9 +5938,11 @@ display_debug_frames (struct dwarf_section *section,
 	      if (do_debug_frames_interp)
 		frame_display_row (fc, &need_col_headers, &max_regs);
 	      else
-		printf ("  DW_CFA_MIPS_advance_loc8: %ld to %08lx\n",
-			ofs * fc->code_factor,
-			fc->pc_begin + ofs * fc->code_factor);
+		printf ("  DW_CFA_MIPS_advance_loc8: %ld to %s\n",
+			(unsigned long) (ofs * fc->code_factor),
+			dwarf_vmatoa_1 (NULL,
+					fc->pc_begin + ofs * fc->code_factor,
+					fc->ptr_size));
 	      fc->pc_begin += ofs * fc->code_factor;
 	      break;
 

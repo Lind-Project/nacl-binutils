@@ -685,6 +685,7 @@ if { [istarget mips*-*-vxworks*] } {
 
     run_dump_test "mips16"
     run_dump_test "mips16-64"
+    run_dump_test "mips16-macro"
     # Check MIPS16e extensions
     run_dump_test_arches "mips16e" [mips_arch_list_matching mips32 !micromips]
     # Check jalx handling
@@ -1038,6 +1039,7 @@ if { [istarget mips*-*-vxworks*] } {
 
     run_dump_test "mips16e-jrc"
     run_dump_test "mips16e-save"
+    run_list_test "mips16e-save-err" "-march=mips32 -32"
     run_dump_test "mips16e-64"
     run_list_test "mips16e-64" "-march=mips32 -32"
     run_dump_test "mips16-intermix"
@@ -1122,6 +1124,9 @@ if { [istarget mips*-*-vxworks*] } {
     run_dump_test "r5900-full"
     run_list_test "r5900-nollsc" "-mabi=o64 -march=r5900"
     run_dump_test "r5900-vu0"
+    run_dump_test "r5900-full-vu0"
+    run_dump_test "r5900-all-vu0"
+    run_list_test "r5900-error-vu0" "-march=r5900"
 
     run_list_test_arches "ext-ill"	[mips_arch_list_matching mips64r2]
 
@@ -1141,4 +1146,5 @@ if { [istarget mips*-*-vxworks*] } {
     run_dump_test_arches "ulh-reloc"	[mips_arch_list_matching mips2]
 
     run_dump_test "l_d-reloc"
+    run_list_test "bltzal"
 }

@@ -1,6 +1,7 @@
 // output.h -- manage the output file for gold   -*- C++ -*-
 
-// Copyright 2006, 2007, 2008, 2009, 2010, 2011 Free Software Foundation, Inc.
+// Copyright 2006, 2007, 2008, 2009, 2010, 2011, 2013
+// Free Software Foundation, Inc.
 // Written by Ian Lance Taylor <iant@google.com>.
 
 // This file is part of gold.
@@ -572,7 +573,7 @@ class Output_segment_headers : public Output_data
 class Output_file_header : public Output_data
 {
  public:
-  Output_file_header(const Target*,
+  Output_file_header(Target*,
 		     const Symbol_table*,
 		     const Output_segment_headers*);
 
@@ -616,7 +617,7 @@ class Output_file_header : public Output_data
   off_t
   do_size() const;
 
-  const Target* target_;
+  Target* target_;
   const Symbol_table* symtab_;
   const Output_segment_headers* segment_header_;
   const Output_section_headers* section_header_;
@@ -2379,10 +2380,13 @@ class Output_data_got : public Output_data_got_base
   // entry from the start of the GOT.
   unsigned int
   add_constant(Valtype constant)
-  {
-    unsigned int got_offset = this->add_got_entry(Got_entry(constant));
-    return got_offset;
-  }
+  { return this->add_got_entry(Got_entry(constant)); }
+
+  // Add a pair of constants to the GOT.  This returns the offset of
+  // the new entry from the start of the GOT.
+  unsigned int
+  add_constant_pair(Valtype c1, Valtype c2)
+  { return this->add_got_entry_pair(Got_entry(c1), Got_entry(c2)); }
 
   // Replace GOT entry I with a new constant.
   void
@@ -4596,7 +4600,7 @@ class Output_segment
   // address of the immediately following segment.  Update *POFF and
   // *PSHNDX.  This should only be called for a PT_LOAD segment.
   uint64_t
-  set_section_addresses(Layout*, bool reset, uint64_t addr,
+  set_section_addresses(const Target*, Layout*, bool reset, uint64_t addr,
 			unsigned int* increase_relro, bool* has_relro,
 			off_t* poff, unsigned int* pshndx);
 
