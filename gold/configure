@@ -695,6 +695,8 @@ DEFAULT_TARGET_ARM_FALSE
 DEFAULT_TARGET_ARM_TRUE
 PLUGINS_FALSE
 PLUGINS_TRUE
+NACLSRPC_FALSE
+NACLSRPC_TRUE
 THREADS_FALSE
 THREADS_TRUE
 installed_linker
@@ -778,6 +780,7 @@ enable_option_checking
 with_sysroot
 enable_gold
 enable_threads
+enable_naclsrpc
 enable_plugins
 enable_targets
 with_lib_path
@@ -1427,6 +1430,7 @@ Optional Features:
   --enable-FEATURE[=ARG]  include FEATURE [ARG=yes]
   --enable-gold[=ARG]     build gold [ARG={default,yes,no}]
   --enable-threads        multi-threaded linking
+  --enable-naclsrpc        NaCl SRPC
   --enable-plugins        linker plugins
   --enable-targets        alternative target configurations
   --disable-dependency-tracking  speeds up one-time build
@@ -3313,6 +3317,32 @@ else
   THREADS_TRUE='#'
   THREADS_FALSE=
 fi
+
+
+# Check whether --enable-naclsrpc was given.
+if test "${enable_naclsrpc+set}" = set; then :
+  enableval=$enable_naclsrpc; case "${enableval}" in
+  yes | "") naclsrpc=yes ;;
+  no) naclsrpc=no ;;
+  *) naclsrpc=yes ;;
+ esac
+else
+  naclsrpc=no
+fi
+
+if test "$naclsrpc" = "yes"; then
+
+$as_echo "#define ENABLE_NACLSRPC 1" >>confdefs.h
+
+fi
+ if test "$naclsrpc" = "yes"; then
+  NACLSRPC_TRUE=
+  NACLSRPC_FALSE='#'
+else
+  NACLSRPC_TRUE='#'
+  NACLSRPC_FALSE=
+fi
+
 
 
 # Check whether --enable-plugins was given.
@@ -7632,6 +7662,10 @@ fi
 
 if test -z "${THREADS_TRUE}" && test -z "${THREADS_FALSE}"; then
   as_fn_error "conditional \"THREADS\" was never defined.
+Usually this means the macro was only invoked conditionally." "$LINENO" 5
+fi
+if test -z "${NACLSRPC_TRUE}" && test -z "${NACLSRPC_FALSE}"; then
+  as_fn_error "conditional \"NACLSRPC\" was never defined.
 Usually this means the macro was only invoked conditionally." "$LINENO" 5
 fi
 if test -z "${PLUGINS_TRUE}" && test -z "${PLUGINS_FALSE}"; then
