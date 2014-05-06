@@ -1,3 +1,28 @@
+2014-04-24  Nick Clifton  <nickc@redhat.com>
+
+	2014-01-29  Nick Clifton  <nickc@redhat.com>
+	PR build/16873
+	* bfd-in.h (bfd_set_section_vma): Delete.
+	(bfd_set_section_alignment): Delete.
+	(bfd_set_section_userdata): Delete.
+	(bfd_set_cacheable): Delete.
+	* bfd.c (bfd_set_cacheable): New static inline function.
+	* section.c (bfd_set_section_userdata): Likewise.
+	(bfd_set_section_vma): Likewise.
+	(bfd_set_section_alignment): Likewise.
+	* bfd-in2.h: Regenerate.
+
+2014-03-12  Pedro Alves  <palves@redhat.com>
+
+	PR gdb/16696
+	* rs6000-core.c (rs6000coff_core_p): Cast pointers to bfd_vma
+	through ptr_to_uint instead of through long.
+
+2014-02-17  Rainer Orth  <ro@CeBiTec.Uni-Bielefeld.DE>
+
+	PR build/16550
+	* cache.c (bfd_cache_max_open): Cast RLIM_INFINITY to rlim_t.
+
 2014-01-07  Tom Tromey  <tromey@redhat.com>
 
 	* elf32-xtensa.c (vsprint_msg): Don't use old VA_* compatibility

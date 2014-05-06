@@ -1,3 +1,80 @@
+2014-05-05  Joel Brobecker  <brobecker@adacore.com>
+
+	* version.in: Set GDB version number to 7.7.1.
+
+2014-04-19  Eli Zaretskii  <eliz@gnu.org>
+
+	PR gdb/14018
+	* windows-nat.c (thread_rec): Don't display a warning when
+	SuspendThread fails with ERROR_ACCESS_DENIED.  If SuspendThread
+	fails for any reason, set th->suspended to -1, so that we don't
+	try to resume such a thread.  Also, don't return NULL in these
+	cases, to avoid completely ruin the session due to "PC register is
+	not available" error.
+	(do_windows_fetch_inferior_registers): Check errors in
+	GetThreadContext call.
+	(windows_continue): Accept an additional argument KILLED; if not
+	zero, ignore errors in the SetThreadContext call, since the
+	inferior was killed and is shutting down.
+	(windows_resume, get_windows_debug_event)
+	(windows_create_inferior, windows_mourn_inferior)
+	(windows_kill_inferior): All callers of windows_continue changed
+	to adjust to its new calling sequence.
+
+2014-04-11  Pierre Langlois  <pierre.langlois@embecosm.com>
+
+	PR backtrace/16721
+	PR backtrace/16832
+	* avr-tdep.c (struct gdbarch_tdep): Mention avrxmega in the comment.
+	(avr_gdbarch_init): Add xmega architectures given by bfd_architecture
+	when setting the size of call_length.
+	(avr_scan_prologue): Accept push r1 instruction for small stack
+	allocation.
+	* MAINTAINERS (Write After Approval): Add "Pierre Langlois".
+
+2014-03-05  Pedro Alves  <palves@redhat.com>
+
+	PR gdb/16575
+	* dcache.c (dcache_poke_byte): Constify ptr parameter.  Return
+	void.  Update comment.
+	(dcache_xfer_memory): Delete.
+	(dcache_read_memory_partial): New, based on the read bits of
+	dcache_xfer_memory.
+	(dcache_update): Add status parameter.  Use ULONGEST for len, and
+	adjust.  Discard cache lines if the reason for the update was
+	error.
+	* dcache.h (dcache_xfer_memory): Delete declaration.
+	(dcache_read_memory_partial): New declaration.
+	(dcache_update): Update prototype.
+	* target.c (raw_memory_xfer_partial): Update the dcache here.
+	(memory_xfer_partial_1): Don't handle dcache writes here.
+
+2014-02-26  Pedro Alves  <palves@redhat.com>
+
+	PR breakpoints/16292
+	* infrun.c (handle_signal_stop) <signal arrives while stepping
+	over a breakpoint>: Switch back to the stepping thread.
+
+2014-02-25  Jan Kratochvil  <jan.kratochvil@redhat.com>
+
+	PR gdb/16626
+	* auto-load.c (auto_load_objfile_script_1): Change filename to
+	debugfile.
+
+2014-02-09  Jan Kratochvil  <jan.kratochvil@redhat.com>
+
+	Fix Python stack corruption.
+	* python/py-linetable.c (ltpy_get_pcs_for_line, ltpy_has_line): Use
+	gdb_py_longest.
+
+2014-02-06  Joel Brobecker  <brobecker@adacore.com>
+
+	* version.in: Set GDB version number to 7.7.0.DATE-cvs.
+
+2014-02-06  Joel Brobecker  <brobecker@adacore.com>
+
+	GDB 7.7 released.
+
 2014-02-06  Joel Brobecker  <brobecker@adacore.com>
 
 	* version.in: Set GDB version number to 7.7.
