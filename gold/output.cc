@@ -1798,6 +1798,10 @@ Output_data_dynamic::Dynamic_entry::write(
       val = pool->get_offset(this->u_.str);
       break;
 
+    case DYNAMIC_CUSTOM:
+      val = parameters->target().dynamic_tag_custom_value(this->tag_);
+      break;
+
     default:
       val = this->u_.od->address() + this->offset_;
       break;

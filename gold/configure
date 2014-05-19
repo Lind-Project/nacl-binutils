@@ -692,6 +692,8 @@ DEFAULT_TARGET_POWERPC_FALSE
 DEFAULT_TARGET_POWERPC_TRUE
 DEFAULT_TARGET_I386_FALSE
 DEFAULT_TARGET_I386_TRUE
+DEFAULT_TARGET_MIPS_FALSE
+DEFAULT_TARGET_MIPS_TRUE
 DEFAULT_TARGET_ARM_FALSE
 DEFAULT_TARGET_ARM_TRUE
 PLUGINS_FALSE
@@ -3465,6 +3467,14 @@ for targ in $target $canon_targets; do
 else
   DEFAULT_TARGET_ARM_TRUE='#'
   DEFAULT_TARGET_ARM_FALSE=
+fi
+
+	 if test "$targ_obj" = "mips"; then
+  DEFAULT_TARGET_MIPS_TRUE=
+  DEFAULT_TARGET_MIPS_FALSE='#'
+else
+  DEFAULT_TARGET_MIPS_TRUE='#'
+  DEFAULT_TARGET_MIPS_FALSE=
 fi
 
 	 if test "$targ_obj" = "i386"; then
@@ -7704,6 +7714,10 @@ Usually this means the macro was only invoked conditionally." "$LINENO" 5
 fi
 if test -z "${DEFAULT_TARGET_ARM_TRUE}" && test -z "${DEFAULT_TARGET_ARM_FALSE}"; then
   as_fn_error "conditional \"DEFAULT_TARGET_ARM\" was never defined.
+Usually this means the macro was only invoked conditionally." "$LINENO" 5
+fi
+if test -z "${DEFAULT_TARGET_MIPS_TRUE}" && test -z "${DEFAULT_TARGET_MIPS_FALSE}"; then
+  as_fn_error "conditional \"DEFAULT_TARGET_MIPS\" was never defined.
 Usually this means the macro was only invoked conditionally." "$LINENO" 5
 fi
 if test -z "${DEFAULT_TARGET_I386_TRUE}" && test -z "${DEFAULT_TARGET_I386_FALSE}"; then

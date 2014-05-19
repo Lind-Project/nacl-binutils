@@ -975,6 +975,18 @@ case "${targ}" in
     targ_defvec=ecoff_big_vec
     targ_selvecs=ecoff_little_vec
     ;;
+  mips*el-*-nacl)
+    targ_defvec=bfd_elf32_tradlittlemips_nacl_vec
+    targ_selvecs="bfd_elf32_bigarm_nacl_vec bfd_elf32_i386_nacl_vec"
+    targ64_selvecs="bfd_elf32_x86_64_nacl_vec bfd_elf64_x86_64_nacl_vec"
+    targ_archs="$targ_archs bfd_i386_arch"
+    ;;
+  mips*-*-nacl*)
+    targ_defvec=bfd_elf32_tradbigmips_nacl_vec
+    targ_selvecs="bfd_elf32_littlearm_nacl_vec bfd_elf32_i386_nacl_vec"
+    targ64_selvecs="bfd_elf32_x86_64_nacl_vec bfd_elf64_x86_64_nacl_vec"
+    targ_archs="$targ_archs bfd_i386_arch"
+    ;;
 #ifdef BFD64
   mips*-*-irix6*)
     targ_defvec=bfd_elf32_nbigmips_vec

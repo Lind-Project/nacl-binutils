@@ -217,6 +217,7 @@ for targ in $target $canon_targets; do
 	default_osabi=$targ_osabi
 
 	AM_CONDITIONAL(DEFAULT_TARGET_ARM, test "$targ_obj" = "arm")
+	AM_CONDITIONAL(DEFAULT_TARGET_MIPS, test "$targ_obj" = "mips")
 	AM_CONDITIONAL(DEFAULT_TARGET_I386, test "$targ_obj" = "i386")
 	AM_CONDITIONAL(DEFAULT_TARGET_POWERPC, test "$targ_obj" = "powerpc")
 	AM_CONDITIONAL(DEFAULT_TARGET_SPARC, test "$targ_obj" = "sparc")
