@@ -1,3 +1,8 @@
+2013-11-07  Roland McGrath  <mcgrathr@google.com>
+
+	* objdump.c (dump_dwarf): Grok bfd_mach_x86_64_nacl and
+	bfd_mach_x64_32_nacl as equivalent to bfd_mach_x86_64.
+
 2012-08-26  H.J. Lu  <hongjiu.lu@intel.com>
 
 	PR binutils/4970
