@@ -119,6 +119,14 @@ extern const unsigned char  _sch_tolower[256];
    including another system header (for instance gnulib's stdint.h).
    So we include ctype.h here and then immediately redefine its macros.  */
 
+/* @LOCALMOD-START
+   libcxx's ctype headers define inline functions which contain calls to these
+   functions, which causes the build to fail anytime <string> is included even
+   if the user never attempts to call them. So when using libc++, do not
+   redefine them. (This works because gold's convention is to include C++
+   standard headers before safe-ctype.h)
+ */
+#ifndef _LIBCPP_VERSION
 #include <ctype.h>
 #undef isalpha
 #define isalpha(c) do_not_use_isalpha_with_safe_ctype
@@ -146,5 +154,6 @@ extern const unsigned char  _sch_tolower[256];
 #define toupper(c) do_not_use_toupper_with_safe_ctype
 #undef tolower
 #define tolower(c) do_not_use_tolower_with_safe_ctype
+#endif // _LIBCPP_VERSION  @LOCALMOD-END
 
 #endif /* SAFE_CTYPE_H */
