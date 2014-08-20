@@ -100,6 +100,12 @@ class Target_selector_nacl : public base_selector
       bfd_name_(bfd_name), emulation_(emulation)
   { }
 
+  // @LOCALMOD-BEGIN
+  const char*
+  bfd_name() const
+  { return this->bfd_name_; }
+  // @LOCALMOD-END
+
  protected:
   virtual Target*
   do_instantiate_target()

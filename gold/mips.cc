@@ -1,7 +1,7 @@
 // mips.cc -- mips target support for gold.
 
-// Copyright 2011, 2012, 2013 Free Software Foundation, Inc.
-// Written by Sasa Stankovic <sasa.stankovic@rt-rk.com>
+// Copyright (C) 2011-2014 Free Software Foundation, Inc.
+// Written by Sasa Stankovic <sasa.stankovic@imgtec.com>
 //        and Aleksandar Simeonov <aleksandar.simeonov@rt-rk.com>.
 // This file contains borrowed and adapted code from bfd/elfxx-mips.c.
 
@@ -83,108 +83,6 @@ template<int size, bool big_endian>
 class Mips16_stub_section;
 
 // The ABI says that every symbol used by dynamic relocations must have
-// The ""'s around str ensure str is a string literal, so sizeof works.
-#define strprefix(var, str)   (strncmp(var, str, sizeof("" str "") - 1) == 0)
-
-// Return true if this symbol should be added to the dynamic symbol
-// table.  This function is identical to Symbol::should_add_dynsym_entry.
-
-inline bool
-should_add_dynsym_entry(Symbol* sym, Symbol_table* symtab)
-{
-  // If the symbol is only present on plugin files, the plugin decided we
-  // don't need it.
-  if (!sym->in_real_elf())
-    return false;
-
-  // If the symbol is used by a dynamic relocation, we need to add it.
-  if (sym->needs_dynsym_entry())
-    return true;
-
-  // If this symbol's section is not added, the symbol need not be added. 
-  // The section may have been GCed.  Note that export_dynamic is being
-  // overridden here.  This should not be done for shared objects.
-  if (parameters->options().gc_sections()
-      && !parameters->options().shared()
-      && sym->source() == Symbol::FROM_OBJECT
-      && !sym->object()->is_dynamic())
-    {
-      Relobj* relobj = static_cast<Relobj*>(sym->object());
-      bool is_ordinary;
-      unsigned int shndx = sym->shndx(&is_ordinary);
-      if (is_ordinary && shndx != elfcpp::SHN_UNDEF
-          && !relobj->is_section_included(shndx)
-          && !symtab->is_section_folded(relobj, shndx))
-        return false;
-    }
-
-  // If the symbol was forced dynamic in a --dynamic-list file
-  // or an --export-dynamic-symbol option, add it.
-  if (!sym->is_from_dynobj()
-      && (parameters->options().in_dynamic_list(sym->name())
-	  || parameters->options().is_export_dynamic_symbol(sym->name())))
-    {
-      if (!sym->is_forced_local())
-        return true;
-      gold_warning(_("Cannot export local symbol '%s'"),
-		   sym->demangled_name().c_str());
-      return false;
-    }
-
-  // If the symbol was forced local in a version script, do not add it.
-  if (sym->is_forced_local())
-    return false;
-
-  // If dynamic-list-data was specified, add any STT_OBJECT.
-  if (parameters->options().dynamic_list_data()
-      && !sym->is_from_dynobj()
-      && sym->type() == elfcpp::STT_OBJECT)
-    return true;
-
-  // If --dynamic-list-cpp-new was specified, add any new/delete symbol.
-  // If --dynamic-list-cpp-typeinfo was specified, add any typeinfo symbols.
-  if ((parameters->options().dynamic_list_cpp_new()
-       || parameters->options().dynamic_list_cpp_typeinfo())
-      && !sym->is_from_dynobj())
-    {
-      // TODO(csilvers): We could probably figure out if we're an operator
-      //                 new/delete or typeinfo without the need to demangle.
-      char* demangled_name = cplus_demangle(sym->name(),
-                                            DMGL_ANSI | DMGL_PARAMS);
-      if (demangled_name == NULL)
-        {
-          // Not a C++ symbol, so it can't satisfy these flags
-        }
-      else if (parameters->options().dynamic_list_cpp_new()
-               && (strprefix(demangled_name, "operator new")
-                   || strprefix(demangled_name, "operator delete")))
-        {
-          free(demangled_name);
-          return true;
-        }
-      else if (parameters->options().dynamic_list_cpp_typeinfo()
-               && (strprefix(demangled_name, "typeinfo name for")
-                   || strprefix(demangled_name, "typeinfo for")))
-        {
-          free(demangled_name);
-          return true;
-        }
-      else
-        free(demangled_name);
-    }
-
-  // If exporting all symbols or building a shared library,
-  // and the symbol is defined in a regular object and is
-  // externally visible, we need to add it.
-  if ((parameters->options().export_dynamic() || parameters->options().shared())
-      && !sym->is_from_dynobj()
-      && !sym->is_undefined()
-      && sym->is_externally_visible())
-    return true;
-
-  return false;
-}
-
 // a global GOT entry.  Among other things, this provides the dynamic
 // linker with a free, directly-indexed cache.  The GOT can therefore
 // contain symbols that are not referenced by GOT relocations themselves
@@ -1284,7 +1182,7 @@ class Mips_symbol : public Sized_symbol<size>
   template<bool big_endian>
   Mips16_stub_section<size, big_endian>*
   get_mips16_fn_stub() const
-  { 
+  {
     return static_cast<Mips16_stub_section<size, big_endian>*>(mips16_fn_stub_);
   }
 
@@ -1581,6 +1479,7 @@ class Mips_relobj : public Sized_relobj_file<size, big_endian>
   typedef typename elfcpp::Elf_types<size>::Elf_Addr Mips_address;
   typedef std::map<unsigned int, Mips16_stub_section<size, big_endian>*>
     Mips16_stubs_int_map;
+  typedef typename elfcpp::Swap<size, big_endian>::Valtype Valtype;
 
  public:
   Mips_relobj(const std::string& name, Input_file* input_file, off_t offset,
@@ -1591,7 +1490,8 @@ class Mips_relobj : public Sized_relobj_file<size, big_endian>
       local_non_16bit_calls_(), local_16bit_calls_(), local_mips16_fn_stubs_(),
       local_mips16_call_stubs_(), gp_(0), got_info_(NULL),
       section_is_mips16_fn_stub_(), section_is_mips16_call_stub_(),
-      section_is_mips16_call_fp_stub_(), pdr_shndx_(-1U)
+      section_is_mips16_call_fp_stub_(), pdr_shndx_(-1U), gprmask_(0),
+      cprmask1_(0), cprmask2_(0), cprmask3_(0), cprmask4_(0)
   {
     this->is_pic_ = (ehdr.get_e_flags() & elfcpp::EF_MIPS_PIC) != 0;
     this->is_n32_ = elfcpp::abi_n32(ehdr.get_e_flags());
@@ -1828,6 +1728,31 @@ class Mips_relobj : public Sized_relobj_file<size, big_endian>
   void
   discard_mips16_stub_sections(Symbol_table* symtab);
 
+  // Return gprmask from the .reginfo section of this object.
+  Valtype
+  gprmask() const
+  { return this->gprmask_; }
+
+  // Return cprmask1 from the .reginfo section of this object.
+  Valtype
+  cprmask1() const
+  { return this->cprmask1_; }
+
+  // Return cprmask2 from the .reginfo section of this object.
+  Valtype
+  cprmask2() const
+  { return this->cprmask2_; }
+
+  // Return cprmask3 from the .reginfo section of this object.
+  Valtype
+  cprmask3() const
+  { return this->cprmask3_; }
+
+  // Return cprmask4 from the .reginfo section of this object.
+  Valtype
+  cprmask4() const
+  { return this->cprmask4_; }
+
  protected:
   // Count the local symbols.
   void
@@ -1896,6 +1821,17 @@ class Mips_relobj : public Sized_relobj_file<size, big_endian>
 
   // .pdr section index.
   unsigned int pdr_shndx_;
+
+  // gprmask from the .reginfo section of this object.
+  Valtype gprmask_;
+  // cprmask1 from the .reginfo section of this object.
+  Valtype cprmask1_;
+  // cprmask2 from the .reginfo section of this object.
+  Valtype cprmask2_;
+  // cprmask3 from the .reginfo section of this object.
+  Valtype cprmask3_;
+  // cprmask4 from the .reginfo section of this object.
+  Valtype cprmask4_;
 };
 
 // Mips_output_data_got class.
@@ -2657,15 +2593,26 @@ class Mips_output_section_reginfo : public Output_section
   Mips_output_section_reginfo(const char* name, elfcpp::Elf_Word type,
                               elfcpp::Elf_Xword flags,
                               Target_mips<size, big_endian>* target)
-    : Output_section(name, type, flags), target_(target)
-  {
-    this->set_always_keeps_input_sections();
-  }
+    : Output_section(name, type, flags), target_(target), gprmask_(0),
+      cprmask1_(0), cprmask2_(0), cprmask3_(0), cprmask4_(0)
+  { }
 
   // Downcast a base pointer to a Mips_output_section_reginfo pointer.
   static Mips_output_section_reginfo<size, big_endian>*
   as_mips_output_section_reginfo(Output_section* os)
   { return static_cast<Mips_output_section_reginfo<size, big_endian>*>(os); }
+
+  // Set masks of the output .reginfo section.
+  void
+  set_masks(Valtype gprmask, Valtype cprmask1, Valtype cprmask2,
+            Valtype cprmask3, Valtype cprmask4)
+  {
+    this->gprmask_ = gprmask;
+    this->cprmask1_ = cprmask1;
+    this->cprmask2_ = cprmask2;
+    this->cprmask3_ = cprmask3;
+    this->cprmask4_ = cprmask4;
+  }
 
  protected:
   // Set the final data size.
@@ -2679,6 +2626,17 @@ class Mips_output_section_reginfo : public Output_section
 
  private:
   Target_mips<size, big_endian>* target_;
+
+  // gprmask of the output .reginfo section.
+  Valtype gprmask_;
+  // cprmask1 of the output .reginfo section.
+  Valtype cprmask1_;
+  // cprmask2 of the output .reginfo section.
+  Valtype cprmask2_;
+  // cprmask3 of the output .reginfo section.
+  Valtype cprmask3_;
+  // cprmask4 of the output .reginfo section.
+  Valtype cprmask4_;
 };
 
 // The MIPS target has relocation types which default handling of relocatable
@@ -2911,6 +2869,7 @@ class Target_mips : public Sized_target<size, big_endian>
   typedef Output_data_reloc<elfcpp::SHT_RELA, true, size, big_endian>
     Reloca_section;
   typedef typename elfcpp::Swap<32, big_endian>::Valtype Valtype32;
+  typedef typename elfcpp::Swap<size, big_endian>::Valtype Valtype;
 
  public:
   Target_mips(const Target::Target_info* info = &mips_info)
@@ -3501,7 +3460,7 @@ class Target_mips : public Sized_target<size, big_endian>
           got->record_global_got_symbol(this->sym_, this->relobj_,
                                         this->r_type_, true, false);
           if (!symbol_references_local(this->sym_,
-                                should_add_dynsym_entry(this->sym_, symtab)))
+                                this->sym_->should_add_dynsym_entry(symtab)))
             rel_dyn->add_global(this->sym_, this->r_type_,
                                 this->output_section_, this->relobj_,
                                 this->shndx_, this->r_offset_);
@@ -3753,7 +3712,7 @@ class Target_mips : public Sized_target<size, big_endian>
 
   // Information about this specific target which we pass to the
   // general Target structure.
-  static Target::Target_info mips_info;
+  static const Target::Target_info mips_info;
   // The GOT section.
   Mips_output_data_got<size, big_endian>* got_;
   // gp symbol.  It has the value of .got + 0x7FF0.
@@ -5314,11 +5273,11 @@ Mips_got_info<size, big_endian>::count_got_symbols(Symbol_table* symtab)
       // Those that are aren't in the dynamic symbol table must also
       // live in the local GOT.
 
-      if (!should_add_dynsym_entry(sym, symtab)
+      if (!sym->should_add_dynsym_entry(symtab)
           || (sym->got_only_for_calls()
-              ? symbol_calls_local(sym, should_add_dynsym_entry(sym, symtab))
+              ? symbol_calls_local(sym, sym->should_add_dynsym_entry(symtab))
               : symbol_references_local(sym,
-                                        should_add_dynsym_entry(sym, symtab))))
+                                        sym->should_add_dynsym_entry(symtab))))
         // The symbol belongs in the local GOT.  We no longer need this
         // entry if it was only used for relocations; those relocations
         // will be against the null or section symbol instead.
@@ -5936,6 +5895,13 @@ Mips_relobj<size, big_endian>::do_read_symbols(Read_symbols_data* sd)
              this->get_view(section_offset, section_size, true, false);
 
           this->gp_ = elfcpp::Swap<size, big_endian>::readval(view + 20);
+
+          // Read the rest of .reginfo.
+          this->gprmask_ = elfcpp::Swap<size, big_endian>::readval(view);
+          this->cprmask1_ = elfcpp::Swap<size, big_endian>::readval(view + 4);
+          this->cprmask2_ = elfcpp::Swap<size, big_endian>::readval(view + 8);
+          this->cprmask3_ = elfcpp::Swap<size, big_endian>::readval(view + 12);
+          this->cprmask4_ = elfcpp::Swap<size, big_endian>::readval(view + 16);
         }
 
       const char* name = pnames + shdr.get_sh_name();
@@ -6009,7 +5975,7 @@ Mips_relobj<size, big_endian>::discard_mips16_stub_sections(Symbol_table* symtab
               else
                 {
                   gsym->set_mips16_fn_stub(stub_section);
-                  if (should_add_dynsym_entry(gsym, symtab))
+                  if (gsym->should_add_dynsym_entry(symtab))
                     {
                       // If we have a MIPS16 function with a stub, the
                       // dynamic symbol must refer to the stub, since only
@@ -7120,12 +7086,8 @@ Mips_output_data_mips_stubs<size, big_endian>::do_write(Output_file* of)
 
   // Fill the unused space with zeroes.
   // TODO(sasa): Can we strip unused bytes during the relaxation?
-  unsigned char* end = oview + oview_size;
-  while (pov < end)
-    {
-      elfcpp::Swap<32, big_endian>::writeval(pov, 0);
-      pov += 4;
-    }
+  if (unused > 0)
+    memset(pov, 0, unused);
 
   of->write_output_view(offset, oview_size, oview);
 }
@@ -7136,41 +7098,15 @@ template<int size, bool big_endian>
 void
 Mips_output_section_reginfo<size, big_endian>::do_write(Output_file* of)
 {
-  Valtype gprmask = 0;
-  Valtype cprmask1 = 0;
-  Valtype cprmask2 = 0;
-  Valtype cprmask3 = 0;
-  Valtype cprmask4 = 0;
-
-  for (Input_section_list::const_iterator p = this->input_sections().begin();
-       p != this->input_sections().end();
-       ++p)
-    {
-      Relobj* relobj = p->relobj();
-      unsigned int shndx = p->shndx();
-
-      section_size_type section_size;
-      const unsigned char* section_contents =
-        relobj->section_contents(shndx, &section_size, false);
-
-      gprmask |= elfcpp::Swap<size, big_endian>::readval(section_contents);
-      cprmask1 |= elfcpp::Swap<size, big_endian>::readval(section_contents + 4);
-      cprmask2 |= elfcpp::Swap<size, big_endian>::readval(section_contents + 8);
-      cprmask3 |=
-        elfcpp::Swap<size, big_endian>::readval(section_contents + 12);
-      cprmask4 |=
-        elfcpp::Swap<size, big_endian>::readval(section_contents + 16);
-    }
-
   off_t offset = this->offset();
   off_t data_size = this->data_size();
 
   unsigned char* view = of->get_output_view(offset, data_size);
-  elfcpp::Swap<size, big_endian>::writeval(view, gprmask);
-  elfcpp::Swap<size, big_endian>::writeval(view + 4, cprmask1);
-  elfcpp::Swap<size, big_endian>::writeval(view + 8, cprmask2);
-  elfcpp::Swap<size, big_endian>::writeval(view + 12, cprmask3);
-  elfcpp::Swap<size, big_endian>::writeval(view + 16, cprmask4);
+  elfcpp::Swap<size, big_endian>::writeval(view, this->gprmask_);
+  elfcpp::Swap<size, big_endian>::writeval(view + 4, this->cprmask1_);
+  elfcpp::Swap<size, big_endian>::writeval(view + 8, this->cprmask2_);
+  elfcpp::Swap<size, big_endian>::writeval(view + 12, this->cprmask3_);
+  elfcpp::Swap<size, big_endian>::writeval(view + 16, this->cprmask4_);
   // Write the gp value.
   elfcpp::Swap<size, big_endian>::writeval(view + 20,
                                            this->target_->gp_value());
@@ -7224,7 +7160,7 @@ Mips_copy_relocs<sh_type, size, big_endian>::emit_entry(
         Mips_relobj<size, big_endian>::as_mips_relobj(entry.relobj_);
       target->got_section(symtab, layout)->record_global_got_symbol(
                           sym, object, entry.reloc_type_, true, false);
-      if (!symbol_references_local(sym, should_add_dynsym_entry(sym, symtab)))
+      if (!symbol_references_local(sym, sym->should_add_dynsym_entry(symtab)))
         target->rel_dyn_section(layout)->add_global(sym, elfcpp::R_MIPS_REL32,
             entry.output_section_, entry.relobj_, entry.shndx_, entry.address_);
       else
@@ -8028,7 +7964,7 @@ Target_mips<size, big_endian>::do_finalize_sections(Layout* layout,
       gold_error(".gnu.hash is incompatible with the MIPS ABI");
     }
 
-  // Check whether the final section that was scaned has HI16 or GOT16
+  // Check whether the final section that was scanned has HI16 or GOT16
   // relocations without the corresponding LO16 part.
   if (this->got16_addends_.size() > 0)
       gold_error("Can't find matching LO16 reloc");
@@ -8093,6 +8029,26 @@ Target_mips<size, big_endian>::do_finalize_sections(Layout* layout,
 
       this->merge_processor_specific_flags(dynobj->name(), in_flags, ei_class,
                                            true);
+    }
+
+  // Merge .reginfo contents of input objects.
+  Valtype gprmask = 0;
+  Valtype cprmask1 = 0;
+  Valtype cprmask2 = 0;
+  Valtype cprmask3 = 0;
+  Valtype cprmask4 = 0;
+  for (Input_objects::Relobj_iterator p = input_objects->relobj_begin();
+       p != input_objects->relobj_end();
+       ++p)
+    {
+      Mips_relobj<size, big_endian>* relobj =
+        Mips_relobj<size, big_endian>::as_mips_relobj(*p);
+
+      gprmask |= relobj->gprmask();
+      cprmask1 |= relobj->cprmask1();
+      cprmask2 |= relobj->cprmask2();
+      cprmask3 |= relobj->cprmask3();
+      cprmask4 |= relobj->cprmask4();
     }
 
   if (this->plt_ != NULL)
@@ -8172,6 +8128,8 @@ Target_mips<size, big_endian>::do_finalize_sections(Layout* layout,
           Mips_output_section_reginfo<size, big_endian>* reginfo =
             Mips_output_section_reginfo<size, big_endian>::
               as_mips_output_section_reginfo(*p);
+
+          reginfo->set_masks(gprmask, cprmask1, cprmask2, cprmask3, cprmask4);
 
           if (!parameters->options().relocatable())
             {
@@ -10514,7 +10472,46 @@ Target_mips<size, big_endian>::elf_mips_mach_name(elfcpp::Elf_Word e_flags)
 }
 
 template<int size, bool big_endian>
-Target::Target_info Target_mips<size, big_endian>::mips_info =
+const Target::Target_info Target_mips<size, big_endian>::mips_info =
+{
+  size,                 // size
+  big_endian,           // is_big_endian
+  elfcpp::EM_MIPS,      // machine_code
+  true,                 // has_make_symbol
+  false,                // has_resolve
+  false,                // has_code_fill
+  true,                 // is_default_stack_executable
+  false,                // can_icf_inline_merge_sections
+  '\0',                 // wrap_char
+  "/lib/ld.so.1",       // dynamic_linker
+  0x400000,             // default_text_segment_address
+  64 * 1024,            // abi_pagesize (overridable by -z max-page-size)
+  4 * 1024,             // common_pagesize (overridable by -z common-page-size)
+  false,                // isolate_execinstr
+  0,                    // rosegment_gap
+  elfcpp::SHN_UNDEF,    // small_common_shndx
+  elfcpp::SHN_UNDEF,    // large_common_shndx
+  0,                    // small_common_section_flags
+  0,                    // large_common_section_flags
+  NULL,                 // attributes_section
+  NULL,                 // attributes_vendor
+  "__start"		// entry_symbol_name
+};
+
+template<int size, bool big_endian>
+class Target_mips_nacl : public Target_mips<size, big_endian>
+{
+ public:
+  Target_mips_nacl()
+    : Target_mips<size, big_endian>(&mips_nacl_info)
+  { }
+
+ private:
+  static const Target::Target_info mips_nacl_info;
+};
+
+template<int size, bool big_endian>
+const Target::Target_info Target_mips_nacl<size, big_endian>::mips_nacl_info =
 {
   size,                 // size
   big_endian,           // is_big_endian
@@ -10527,8 +10524,8 @@ Target::Target_info Target_mips<size, big_endian>::mips_info =
   '\0',                 // wrap_char
   "/lib/ld.so.1",       // dynamic_linker
   0x20000,              // default_text_segment_address
-  0x10000,		// abi_pagesize (overridable by -z max-page-size)
-  0x10000,		// common_pagesize (overridable by -z common-page-size)
+  0x10000,              // abi_pagesize (overridable by -z max-page-size)
+  0x10000,              // common_pagesize (overridable by -z common-page-size)
   true,                 // isolate_execinstr
   0x10000000,           // rosegment_gap
   elfcpp::SHN_UNDEF,    // small_common_shndx
@@ -10537,7 +10534,7 @@ Target::Target_info Target_mips<size, big_endian>::mips_info =
   0,                    // large_common_section_flags
   NULL,                 // attributes_section
   NULL,                 // attributes_vendor
-  "__start"		// entry_symbol_name
+  "_start"              // entry_symbol_name
 };
 
 // Target selector for Mips.  Note this is never instantiated directly.
@@ -10561,23 +10558,20 @@ public:
   { return new Target_mips<size, big_endian>(); }
 };
 
-// Target selectors.
-
 template<int size, bool big_endian>
 class Target_selector_mips_nacl
   : public Target_selector_nacl<Target_selector_mips<size, big_endian>,
-                                Target_mips<size, big_endian> >
+                                Target_mips_nacl<size, big_endian> >
 {
  public:
   Target_selector_mips_nacl()
     : Target_selector_nacl<Target_selector_mips<size, big_endian>,
-                           Target_mips<size, big_endian> >(
-          "mips",
-          big_endian ? "elf32-tradbigmips-nacl" : "elf32-tradlittlemips-nacl",
-          big_endian ? "elf32-tradbigmips-nacl" : "elf32-tradlittlemips-nacl")
+                           Target_mips_nacl<size, big_endian> >(
+        // NaCl currently supports only MIPS32 little-endian.
+        "mipsel", "elf32-tradlittlemips-nacl", "elf32-tradlittlemips-nacl")
   { }
 };
 
-Target_selector_mips_nacl<32, false> target_selector_mips32;
+Target_selector_mips_nacl<32, false> target_selector_mips32el;
 
 } // End anonymous namespace.
