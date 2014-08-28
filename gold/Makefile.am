@@ -49,7 +49,11 @@ if NACLSRPC
 # NOTE: we use --noirt to specify that private libraries should
 # be used instead of the stable IRT interface.
 NACLSRPCLIBS = -lsrpc -lplatform -limc -limc_syscalls -lgio -lpthread
-NACLSRPCLDFLAGS = -Wl,--noirt
+NACLLDFLAGS = -Wl,--noirt
+else
+if LINUX
+NACLLDFLAGS = -Wl,-rpath='$$ORIGIN/../lib'
+endif
 endif
 
 AM_YFLAGS = -d
@@ -194,7 +198,7 @@ endif
 ld_new_SOURCES = $(sources_var) $(NACLSRPC_SOURCES)
 ld_new_DEPENDENCIES = $(deps_var)
 ld_new_LDADD = $(ldadd_var) $(NACLSRPCLIBS)
-ld_new_LDFLAGS = $(ldflags_var) $(NACLSRPCLDFLAGS)
+ld_new_LDFLAGS = $(ldflags_var) $(NACLLDFLAGS)
 
 EXTRA_ld_new_SOURCES = $(TARGETSOURCES)
 

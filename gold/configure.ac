@@ -101,6 +101,9 @@ if test "$threads" = "yes"; then
 fi
 AM_CONDITIONAL(THREADS, test "$threads" = "yes")
 
+dnl @LOCALMOD-START
+AC_CANONICAL_HOST
+AM_CONDITIONAL(LINUX, test "$host_os" = "linux-gnu")
 dnl Build with NaCl srpc.
 AC_ARG_ENABLE([naclsrpc],
 [  --enable-naclsrpc        NaCl SRPC],
@@ -115,7 +118,7 @@ if test "$naclsrpc" = "yes"; then
 	    [Define to do build with NaCl SRPC])
 fi
 AM_CONDITIONAL(NACLSRPC, test "$naclsrpc" = "yes")
-
+dnl @LOCALMOD-END
 
 AC_ARG_ENABLE([plugins],
 [  --enable-plugins        linker plugins],

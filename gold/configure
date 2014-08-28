@@ -700,6 +700,8 @@ PLUGINS_FALSE
 PLUGINS_TRUE
 NACLSRPC_FALSE
 NACLSRPC_TRUE
+LINUX_FALSE
+LINUX_TRUE
 THREADS_FALSE
 THREADS_TRUE
 installed_linker
@@ -3322,6 +3324,15 @@ else
 fi
 
 
+
+ if test "$host_os" = "linux-gnu"; then
+  LINUX_TRUE=
+  LINUX_FALSE='#'
+else
+  LINUX_TRUE='#'
+  LINUX_FALSE=
+fi
+
 # Check whether --enable-naclsrpc was given.
 if test "${enable_naclsrpc+set}" = set; then :
   enableval=$enable_naclsrpc; case "${enableval}" in
@@ -3345,7 +3356,6 @@ else
   NACLSRPC_TRUE='#'
   NACLSRPC_FALSE=
 fi
-
 
 
 # Check whether --enable-plugins was given.
@@ -7716,6 +7726,10 @@ fi
 
 if test -z "${THREADS_TRUE}" && test -z "${THREADS_FALSE}"; then
   as_fn_error "conditional \"THREADS\" was never defined.
+Usually this means the macro was only invoked conditionally." "$LINENO" 5
+fi
+if test -z "${LINUX_TRUE}" && test -z "${LINUX_FALSE}"; then
+  as_fn_error "conditional \"LINUX\" was never defined.
 Usually this means the macro was only invoked conditionally." "$LINENO" 5
 fi
 if test -z "${NACLSRPC_TRUE}" && test -z "${NACLSRPC_FALSE}"; then
