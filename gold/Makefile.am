@@ -46,10 +46,7 @@ THREADSLIB = -lpthread
 endif
 
 if NACLSRPC
-# NOTE: we use --noirt to specify that private libraries should
-# be used instead of the stable IRT interface.
 NACLSRPCLIBS = -lsrpc -lplatform -limc -limc_syscalls -lgio -lpthread
-NACLLDFLAGS = -Wl,--noirt
 else
 if LINUX
 NACLLDFLAGS = -Wl,-rpath='$$ORIGIN/../lib'

@@ -424,11 +424,8 @@ LIBIBERTY = ../libiberty/libiberty.a
 @PLUGINS_TRUE@LIBDL = @DLOPEN_LIBS@
 @THREADS_TRUE@THREADSLIB = -lpthread
 
-# NOTE: we use --noirt to specify that private libraries should
-# be used instead of the stable IRT interface.
 @NACLSRPC_TRUE@NACLSRPCLIBS = -lsrpc -lplatform -limc -limc_syscalls -lgio -lpthread
 @LINUX_TRUE@@NACLSRPC_FALSE@NACLLDFLAGS = -Wl,-rpath='$$ORIGIN/../lib'
-@NACLSRPC_TRUE@NACLLDFLAGS = -Wl,--noirt
 AM_YFLAGS = -d
 
 # Automake 1.10+ disables lex and yacc output file regeneration if
