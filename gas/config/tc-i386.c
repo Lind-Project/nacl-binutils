@@ -957,6 +957,21 @@ pe_lcomm (int needs_align)
 }
 #endif
 
+static int dwarf2_addr_size;
+
+static void
+s_x86_dwarf_addr_size (int arg ATTRIBUTE_UNUSED)
+{
+  unsigned int size = get_absolute_expression ();
+  SKIP_WHITESPACE ();
+  demand_empty_rest_of_line ();
+
+  if (size != 4 && size != 8)
+    as_bad (_(".dwarf_addr_size argument must be 4 or 8"));
+  else
+    dwarf2_addr_size = size;
+}
+
 const pseudo_typeS md_pseudo_table[] =
 {
 #if !defined(OBJ_AOUT) && !defined(USE_ALIGN_PTWO)
@@ -981,6 +996,7 @@ const pseudo_typeS md_pseudo_table[] =
   {"code16", set_code_flag, CODE_16BIT},
   {"code32", set_code_flag, CODE_32BIT},
   {"code64", set_code_flag, CODE_64BIT},
+  {"dwarf_addr_size", s_x86_dwarf_addr_size, 0},
   {"intel_syntax", set_intel_syntax, 1},
   {"att_syntax", set_intel_syntax, 0},
   {"intel_mnemonic", set_intel_mnemonic, 1},
@@ -10929,6 +10945,8 @@ tc_x86_frame_initial_instructions (void)
 int
 x86_dwarf2_addr_size (void)
 {
+  if (dwarf2_addr_size != 0)
+    return dwarf2_addr_size;
 #if defined (OBJ_MAYBE_ELF) || defined (OBJ_ELF)
   if (x86_elf_abi == X86_64_X32_ABI)
     return 4;
