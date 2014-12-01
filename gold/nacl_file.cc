@@ -33,8 +33,7 @@
 #include <unistd.h>
 #include <vector>
 
-#include "native_client/src/public/imc_syscalls.h"
-#include "native_client/src/public/name_service.h"
+#include <irt.h>
 #include "native_client/src/shared/srpc/nacl_srpc.h"
 
 #include "gold.h"
@@ -54,14 +53,10 @@ const int kMaxObjectFiles = 16;
 namespace
 {
 std::map<std::string, int> g_preopened_files;
+struct nacl_irt_resource_open g_irt_resource_open;
 
-// Register some filename -> fd mappings so that we do not
-// need to use the ManifestNameService  (aka directory) service.
-// Note, there seems to be the following convention:
-// the directory service knows about files like  "files/<filename>".
-// Locally, we refer to the files as <filename>.
-// For object files passed in via Srpc, we register the incoming .o
-// descriptor as FILENAME_OBJ WITHOUT the "files/" prefix.
+// Register some filename -> fd mappings that correspond to pre-opened fds.
+// Otherwise files are opened via the IRT open_resource() function.
 void RegisterPreopenedFd(const char* filename, int fd) {
   std::string key(filename);
   std::map<std::string, int>::iterator it = g_preopened_files.find(key);
@@ -74,73 +69,20 @@ void RegisterPreopenedFd(const char* filename, int fd) {
   }
 }
 
-// Look up additional resource files through the nacl manifest service
-// which essentially maps a (file)name to a (file)descriptor
-NaClSrpcChannel g_nacl_manifest_channel;
-
-// Make ManifestNameService service available for lookups.
-void ManifestLookupInit() {
-  int nameservice_address = -1;
-  int nameservice_fd = -1;
-  int manifest_address = -1;
-  int manifest_fd = -1;
-  int status;
-  NaClSrpcChannel nameservice_channel;
-
-  /* Attach to the reverse service for doing manifest file queries. */
-  nacl_nameservice(&nameservice_address);
-  if (nameservice_address == -1) {
-    gold_fatal(_("nacl_nameservice failed\n"));
-  }
-  nameservice_fd = imc_connect(nameservice_address);
-  close(nameservice_address);
-  if (nameservice_fd == -1) {
-    gold_fatal(_("name service connect failed\n"));
-  }
-  if (!NaClSrpcClientCtor(&nameservice_channel, nameservice_fd)) {
-    gold_fatal(_("name service channel ctor failed\n"));
-  }
-  if (NACL_SRPC_RESULT_OK !=
-      NaClSrpcInvokeBySignature(&nameservice_channel, NACL_NAME_SERVICE_LOOKUP,
-                                "ManifestNameService", O_RDWR,
-                                &status, &manifest_address)) {
-    gold_fatal(_("ManifestNameService SRPC failed, status %d\n"), status);
-  }
-  NaClSrpcDtor(&nameservice_channel);
-  if (manifest_address == -1) {
-    gold_fatal(_("manifest name service address is -1\n"));
-  }
-  manifest_fd = imc_connect(manifest_address);
-  close(manifest_address);
-  if (manifest_fd == -1) {
-    gold_fatal(_("manifest name service connect failed\n"));
-  }
-  if (!NaClSrpcClientCtor(&g_nacl_manifest_channel, manifest_fd)) {
-    gold_fatal(_("manifest channel ctor failed\n"));
+// Set up interfaces for IRT open_resource.
+void GetIRTInterface() {
+  size_t query_result = nacl_interface_query(
+      NACL_IRT_RESOURCE_OPEN_v0_1,
+      &g_irt_resource_open, sizeof(g_irt_resource_open));
+  if (query_result != sizeof(g_irt_resource_open)) {
+    gold_fatal(_("nacl_file::GetIRTInterface failed"));
   }
 }
 
-void ManifestLookupFini() {
-  NaClSrpcDtor(&g_nacl_manifest_channel);
-}
-
-const int kUnknownFd = -1;
-
-int LookupFileByName(const char* filename) {
-  int fd = kUnknownFd;
-  int status;
-  // Files looked up via the nameservice are assumed to have a "files/" prefix.
-  std::string prefix("files/");
-  std::string full_filename = prefix + std::string(filename);
-  NaClSrpcError error =
-      NaClSrpcInvokeBySignature(&g_nacl_manifest_channel,
-                                NACL_NAME_SERVICE_LOOKUP,
-                                full_filename.c_str(),
-                                O_RDONLY,
-                                &status,
-                                &fd);
-  if (error != NACL_SRPC_RESULT_OK) {
-    gold_fatal(_("Lookup (%s) failed.\n"), filename);
+int IrtOpenFile(const char* filename) {
+  int fd = -1;
+  if (int res = g_irt_resource_open.open_resource(filename, &fd)) {
+    gold_fatal(_("IrtOpenFile (%s) failed: %d\n"), filename, res);
   }
   return fd;
 }
@@ -161,8 +103,7 @@ void RunCommon(const std::vector<std::string>& arg_vec,
   done->Run(done);
 }
 
-
-// c.f.: pnacl/driver/pnacl-nativeld.py
+// c.f.: pnacl/driver/nativeld.py
 const char* kDefaultCommandCommon[] = {
   "gold",
   "--eh-frame-hdr",
@@ -258,23 +199,24 @@ SrpcRunWithSplit(NaClSrpcRpc* rpc,
   RunCommon(result_arg_vec, rpc, done);
 }
 
-} // End namespace gold.
+} // End anonymous namespace.
 
 namespace nacl_file
 {
 
-// This is the only exported API from this file
 int NaClOpenFileDescriptor(const char *filename) {
   std::string key(filename);
   std::map<std::string, int>::iterator it = g_preopened_files.find(key);
   int fd;
+  // First check if it is a pre-opened file.
   if (it != g_preopened_files.end()) {
     fd = it->second;
   } else {
-    // Otherwise, ask the nameservice.
-    fd = LookupFileByName(filename);
+    // Otherwise, open the file through the IRT.
+    fd = IrtOpenFile(filename);
   }
-  // in case the file was re-opened, say to do --start/end-group
+  // In case the file was re-opened, seek back to the beginning.
+  // This might be the case for the --start/end-group implementation.
   lseek(fd, 0, SEEK_SET);
   return fd;
 }
@@ -289,13 +231,11 @@ void NaClReleaseFileDescriptor(int fd) {
 } // End namespace nacl_file.
 
 
-int
-main()
-{
+int main() {
   if (!NaClSrpcModuleInit()) {
     gold_fatal(_("NaClSrpcModuleInit failed\n"));
   }
-  ManifestLookupInit();
+  GetIRTInterface();
 
   // Start the message loop to process SRPCs.
   // It usually never terminates unless killed.
@@ -308,7 +248,6 @@ main()
     gold_fatal(_("NaClSrpcAcceptClientConnection failed\n"));
   }
 
-  ManifestLookupFini();
   NaClSrpcModuleFini();
   return 0;
 }
