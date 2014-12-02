@@ -154,12 +154,16 @@ fix_new_internal (fragS *frag,		/* Which frag?  */
 		  int at_beginning)	/* Add to the start of the list?  */
 {
   fixS *fixP;
+  struct frag_nacl_fixup_list *nacl_fixup;
 
   n_fixups++;
 
   fixP = (fixS *) obstack_alloc (&notes, sizeof (fixS));
 
-  frag->nacl_fixup = fixP;
+  nacl_fixup = obstack_alloc (&notes, sizeof *nacl_fixup);
+  nacl_fixup->next = frag->nacl_fixups;
+  nacl_fixup->fixup = fixP;
+  frag->nacl_fixups = nacl_fixup;
 
   fixP->fx_frag = frag;
   fixP->fx_where = where;
@@ -438,6 +442,7 @@ move_call_insn_to_end(fragS *fragP, fragS *next ATTRIBUTE_UNUSED)
 {
   if (fragP->fr_offset != 0) {
     // fragP->fr_fix is the start of the fixup code (i.e. nops).
+    struct frag_nacl_fixup_list *nacl_fixup;
     int i;
     unsigned char *tmp = alloca (fragP->fr_fix);
     memcpy (tmp, fragP->fr_literal, fragP->fr_fix);
@@ -447,20 +452,17 @@ move_call_insn_to_end(fragS *fragP, fragS *next ATTRIBUTE_UNUSED)
     for (i = 0; i< fragP->fr_fix; i++) {
       fragP->fr_literal[fragP->fr_var+i] = tmp[i];
     }
-    // TODO(sehr): this code should be obsolete.  Remove it.
-    // If it was a direct call, there's a fixup for the target address.
-    // This needs to corrected to point to the new location of the
-    // constant after we moved the nops.
-    // If there is no fixup, but this is a call, then it is an indirect
-    // call, and we need to put in the fixups for the sandbox code.
-    if (fragP->nacl_fixup) {
-      fragP->nacl_fixup->fx_where += fragP->fr_var;
-    }
-    else if (getenv("NACL_CONTROL_ENFORCE_RANGE")) {
-      symbolS* and_mask = symbol_find_or_make ("__nacl_and_mask");
-      symbolS* exec_start = symbol_find_or_make ("__executable_start");
-      fix_new (fragP, 2+fragP->fr_var, 4, and_mask, 0, 0, BFD_RELOC_32);
-      fix_new (fragP, 8+fragP->fr_var, 4, exec_start, 0, 0, BFD_RELOC_32);
+    /* If it was a direct call, there's a fixup for the target address.
+       This needs be to corrected to point to the new location of the
+       constant after we moved the nops.  If this frag contained multiple
+       instructions (a .bundle_lock sequence), then there might be multiple
+       fixups, the last one being for the call itself.  Since the extra
+       nops all went to the beginning of the frag, the same adjustment
+       applies to each fixup.  */
+    for (nacl_fixup = fragP->nacl_fixups;
+         nacl_fixup != NULL;
+         nacl_fixup = nacl_fixup->next) {
+      nacl_fixup->fixup->fx_where += fragP->fr_var;
     }
   }
 }

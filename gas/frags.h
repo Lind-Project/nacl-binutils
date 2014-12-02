@@ -93,10 +93,14 @@ struct frag {
   relax_substateT fr_subtype;
 
   /* NativeClient support:
-   * If this fragment contains a call, we will need to tweak the fixup to
+   * If this fragment contains a call, we will need to tweak any fixups to
    * reflect the padding to put the call at the end of the fragment.
    */
-  fixS *nacl_fixup;
+  struct frag_nacl_fixup_list
+  {
+    struct frag_nacl_fixup_list *next;
+    fixS *fixup;
+  } *nacl_fixups;
 
 #ifdef USING_CGEN
   /* Don't include this unless using CGEN to keep frag size down.  */
