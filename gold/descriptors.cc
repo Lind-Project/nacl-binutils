@@ -48,7 +48,7 @@ static inline void
 set_close_on_exec(int fd ATTRIBUTE_UNUSED)
 {
   // @LOCALMOD-SB-BEGIN
-#if defined(__native_client__)
+#if 0 && defined(__native_client__)
   gold::gold_fatal(_("NaCl gold: unexpected use of fcntl for %d"), fd);
 #else
 // Mingw does not define F_SETFD.

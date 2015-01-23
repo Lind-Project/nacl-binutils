@@ -2128,6 +2128,7 @@ got_page_reloc_p (unsigned int r_type)
   return r_type == R_MIPS_GOT_PAGE || r_type == R_MICROMIPS_GOT_PAGE;
 }
 
+#if !defined(__native_client__)
 static inline bfd_boolean
 got_ofst_reloc_p (unsigned int r_type)
 {
@@ -2139,6 +2140,7 @@ got_hi16_reloc_p (unsigned int r_type)
 {
   return r_type == R_MIPS_GOT_HI16 || r_type == R_MICROMIPS_GOT_HI16;
 }
+#endif
 
 static inline bfd_boolean
 got_lo16_reloc_p (unsigned int r_type)

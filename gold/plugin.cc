@@ -33,6 +33,8 @@
 #include <dlfcn.h>
 #elif defined (HAVE_WINDOWS_H)
 #include <windows.h>
+#elif defined (__native_client__)
+/* Handled inline. */
 #else
 #error Unknown how to handle dynamic-load-libraries.
 #endif
@@ -73,6 +75,10 @@ dlerror(void)
 #include "symtab.h"
 #include "descriptors.h"
 #include "elfcpp.h"
+
+#if defined(__native_client__)
+extern "C" ld_plugin_status LLVMgold_onload(ld_plugin_tv *tv);
+#endif
 
 namespace gold
 {
@@ -178,6 +184,9 @@ void
 Plugin::load()
 {
 #ifdef ENABLE_PLUGINS
+#if defined(__native_client__)
+  ld_plugin_onload onload = ::LLVMgold_onload;
+#else
   // Load the plugin library.
   // FIXME: Look for the library in standard locations.
   this->handle_ = dlopen(this->filename_.c_str(), RTLD_NOW);
@@ -199,6 +208,7 @@ Plugin::load()
   ld_plugin_onload onload;
   gold_assert(sizeof(onload) == sizeof(ptr));
   memcpy(&onload, &ptr, sizeof(ptr));
+#endif
 
   // Get the linker's version number.
   const char* ver = get_version_string();

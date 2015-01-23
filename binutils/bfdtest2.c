@@ -72,7 +72,7 @@ check_format_any (struct bfd *abfd, bfd_format format)
 }
 
 int
-main (int argc, const char** argv)
+main (int argc, char** argv)
 {
   FILE* file;
   bfd *abfd, *mbfd;

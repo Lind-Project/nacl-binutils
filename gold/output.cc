@@ -5063,7 +5063,7 @@ Output_file::open(off_t file_size)
   // We let the name "-" mean "stdout"
 
   // @LOCALMOD-SB-BEGIN
-#if defined(__native_client__)
+#if 0 && defined(__native_client__)
   int o = nacl_file::NaClOpenFileDescriptor(this->name_);
   if (o < 0)
     gold_fatal(_("%s: open: %s"), this->name_, strerror(errno));
@@ -5083,6 +5083,7 @@ Output_file::open(off_t file_size)
 		::unlink(this->name_);
 	      else if (!parameters->options().relocatable())
 		{
+#if !defined(__native_client__)
 		  // If we don't unlink the existing file, add execute
 		  // permission where read permissions already exist
 		  // and where the umask permits.
@@ -5090,6 +5091,7 @@ Output_file::open(off_t file_size)
 		  ::umask(mask);
 		  s.st_mode |= (s.st_mode & 0444) >> 2;
 		  ::chmod(this->name_, s.st_mode & ~mask);
+#endif
 		}
 	    }
 

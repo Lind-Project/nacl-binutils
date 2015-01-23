@@ -29,6 +29,8 @@
 #include <dlfcn.h>
 #elif defined (HAVE_WINDOWS_H)
 #include <windows.h>
+#elif defined (__native_client__)
+// Handled inline.
 #else
 #error Unknown how to handle dynamic-load-libraries.
 #endif
@@ -160,13 +162,19 @@ bfd_plugin_set_program_name (const char *program_name)
 static int
 try_load_plugin (const char *pname)
 {
+#if !defined(__native_client__)
   static void *plugin_handle;
+#endif
   int tv_size = 4;
   struct ld_plugin_tv tv[tv_size];
   int i;
   ld_plugin_onload onload;
   enum ld_plugin_status status;
 
+#if defined(__native_client__)
+  (void) pname;
+  onload = 0;
+#else
   plugin_handle = dlopen (pname, RTLD_NOW);
   if (!plugin_handle)
     {
@@ -177,6 +185,7 @@ try_load_plugin (const char *pname)
   onload = dlsym (plugin_handle, "onload");
   if (!onload)
     goto err;
+#endif
 
   i = 0;
   tv[i].tv_tag = LDPT_MESSAGE;
@@ -205,7 +214,9 @@ try_load_plugin (const char *pname)
   return 1;
 
  err:
+#if !defined(__native_client__)
   plugin_handle = NULL;
+#endif
   return 0;
 }
 

@@ -11,6 +11,7 @@ Emulates @code{vfork} by calling @code{fork} and returning its value.
 
 */
 
+#if !defined(__native_client__)
 #include "ansidecl.h"
 
 extern int fork (void);
@@ -20,3 +21,4 @@ vfork (void)
 {
   return (fork ());
 }
+#endif

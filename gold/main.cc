@@ -136,7 +136,7 @@ write_debug_script(std::string, const char*, const char*)
 // @LOCALMOD-SB-BEGIN
 // For the SRPC build, main() is defined in nacl_file.cc and runs the SRPC
 // main loop. gold_main() is called by the RPC handler.
-#if defined(__native_client__)
+#if 0 && defined(__native_client__)
 int
 gold_main(int argc, char** argv)
 #else
@@ -161,7 +161,7 @@ main(int argc, char** argv)
   // @LOCALMOD-SB: skip this in SRPC mode since the commandline we
   // build will likely not have @filename (and we can avoid hijacking
   // the file open operation there).
-#if !defined(__native_client__)
+#if 1 || !defined(__native_client__)
   expandargv(&argc, &argv);
 #endif
 
@@ -339,7 +339,7 @@ main(int argc, char** argv)
 
   // @LOCALMOD-SB-BEGIN
   // This function is called via SRPC - we do not want it to exit
-#if defined(__native_client__)
+#if 0 && defined(__native_client__)
   return errors.error_count() > 0;
 #else
   // If the user used --noinhibit-exec, we force the exit status to be

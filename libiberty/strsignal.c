@@ -550,6 +550,7 @@ followed by a newline.
 
 #ifndef HAVE_PSIGNAL
 
+#if !defined(__native_client__)
 void
 psignal (int signo, char *message)
 {
@@ -566,6 +567,7 @@ psignal (int signo, char *message)
       fprintf (stderr, "%s: %s\n", message, sys_siglist[signo]);
     }
 }
+#endif
 
 #endif	/* ! HAVE_PSIGNAL */
 

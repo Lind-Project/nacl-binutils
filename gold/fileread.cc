@@ -181,7 +181,7 @@ File_read::~File_read()
   if (this->is_descriptor_opened_)
     {
       // @LOCALMOD-SB-BEGIN
-#if defined(__native_client__)
+#if 0 && defined(__native_client__)
       nacl_file::NaClReleaseFileDescriptor(this->descriptor_);
 #else
       release_descriptor(this->descriptor_, true);
@@ -206,7 +206,7 @@ File_read::open(const Task* task, const std::string& name)
   this->name_ = name;
 
   // @LOCALMOD-SB-BEGIN
-#if defined(__native_client__)
+#if 0 && defined(__native_client__)
   this->descriptor_ = nacl_file::NaClOpenFileDescriptor(this->name_.c_str());
 #else
   this->descriptor_ = open_descriptor(-1, this->name_.c_str(),
@@ -258,7 +258,7 @@ File_read::reopen_descriptor()
     {
 
       // @LOCALMOD-SB-BEGIN
-#if defined(__native_client__)
+#if 0 && defined(__native_client__)
       this->descriptor_ = nacl_file::NaClOpenFileDescriptor(this->name_.c_str());
 #else
       this->descriptor_ = open_descriptor(this->descriptor_,
@@ -301,7 +301,7 @@ File_read::release()
       if (this->is_descriptor_opened_)
 	{
           // @LOCALMOD-SB-BEGIN
-#if defined(__native_client__)
+#if 0 && defined(__native_client__)
           nacl_file::NaClReleaseFileDescriptor(this->descriptor_);
 #else
 	  release_descriptor(this->descriptor_, false);
