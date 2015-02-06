@@ -34,7 +34,7 @@
 #include <vector>
 
 #include <irt.h>
-#include "native_client/src/shared/srpc/nacl_srpc.h"
+#include <irt_dev.h>
 
 #include "gold.h"
 
@@ -46,14 +46,12 @@ extern int gold_main(int argc, char** argv);
 #define FILENAME_OBJ      "__PNACL_GENERATED"
 
 const int kMaxArgc = 256;
-// This value cannot change without also changing the signature of the
-// RunWithSplit RPC
-const int kMaxObjectFiles = 16;
 
 namespace
 {
 std::map<std::string, int> g_preopened_files;
 struct nacl_irt_resource_open g_irt_resource_open;
+struct nacl_irt_private_pnacl_translator_link g_irt_translator_link;
 
 // Register some filename -> fd mappings that correspond to pre-opened fds.
 // Otherwise files are opened via the IRT open_resource() function.
@@ -69,13 +67,19 @@ void RegisterPreopenedFd(const char* filename, int fd) {
   }
 }
 
-// Set up interfaces for IRT open_resource.
-void GetIRTInterface() {
+void GetIRTInterfaces() {
   size_t query_result = nacl_interface_query(
       NACL_IRT_RESOURCE_OPEN_v0_1,
       &g_irt_resource_open, sizeof(g_irt_resource_open));
   if (query_result != sizeof(g_irt_resource_open)) {
-    gold_fatal(_("nacl_file::GetIRTInterface failed"));
+    gold_fatal(_("Failed to get resource_open IRT interface"));
+  }
+
+  query_result = nacl_interface_query(
+      NACL_IRT_PRIVATE_PNACL_TRANSLATOR_LINK_v0_1,
+      &g_irt_translator_link, sizeof(g_irt_translator_link));
+  if (query_result != sizeof(g_irt_translator_link)) {
+    gold_fatal(_("Failed to get translator_link IRT interface"));
   }
 }
 
@@ -87,9 +91,7 @@ int IrtOpenFile(const char* filename) {
   return fd;
 }
 
-void RunCommon(const std::vector<std::string>& arg_vec,
-               NaClSrpcRpc* rpc,
-               NaClSrpcClosure* done) {
+int RunCommon(const std::vector<std::string>& arg_vec) {
   // repackage the commandline to what main() expects
   const char* argv[kMaxArgc];
   if (arg_vec.size() >  kMaxArgc) {
@@ -98,9 +100,7 @@ void RunCommon(const std::vector<std::string>& arg_vec,
   for (size_t i = 0; i < arg_vec.size(); ++i) argv[i] = arg_vec[i].c_str();
 
   // call hijacked main()
-  int ret = gold_main(arg_vec.size(), const_cast<char**>(&argv[0]));
-  rpc->result = ret > 0 ? NACL_SRPC_RESULT_APP_ERROR : NACL_SRPC_RESULT_OK;
-  done->Run(done);
+  return gold_main(arg_vec.size(), const_cast<char**>(&argv[0]));
 }
 
 // c.f.: pnacl/driver/nativeld.py
@@ -147,17 +147,10 @@ void ProcessCommandline(const char** src,
 }
 
 
-// SRPC signature: :ihhhhhhhhhhhhhhhhh:
-// i:   number N of object files to use
-// h{16}: handles of objfiles. N of them are valid.
-// h:  handle of nexe file
-void
-SrpcRunWithSplit(NaClSrpcRpc* rpc,
-                 NaClSrpcArg** in_args,
-                 NaClSrpcArg** /* out_args */,
-                 NaClSrpcClosure* done) {
-  int object_count = in_args[0]->u.ival;
-  if (object_count > kMaxObjectFiles || object_count < 1) {
+int HandleLinkRequest(int nexe_fd,
+                      const int* obj_file_fds,
+                      int object_count) {
+  if (object_count < 1) {
     gold_fatal(_("Invalid object count"));
   }
   std::vector<char *> filenames(object_count);
@@ -165,9 +158,8 @@ SrpcRunWithSplit(NaClSrpcRpc* rpc,
     const int len = sizeof(FILENAME_OBJ) + 2;
     filenames[i] = new char[len];
     snprintf(filenames[i], len, "%s%d", FILENAME_OBJ, i);
-    RegisterPreopenedFd(filenames[i], in_args[i + 1]->u.hval);
+    RegisterPreopenedFd(filenames[i], obj_file_fds[i]);
   }
-  int nexe_fd = in_args[kMaxObjectFiles + 1]->u.hval;
   RegisterPreopenedFd(FILENAME_OUTPUT, nexe_fd);
 
   std::vector<std::string> result_arg_vec;
@@ -196,7 +188,7 @@ SrpcRunWithSplit(NaClSrpcRpc* rpc,
   for (int i = 0; i < object_count; i++) {
     delete [] filenames[i];
   }
-  RunCommon(result_arg_vec, rpc, done);
+  return RunCommon(result_arg_vec);
 }
 
 } // End anonymous namespace.
@@ -232,22 +224,9 @@ void NaClReleaseFileDescriptor(int fd) {
 
 
 int main() {
-  if (!NaClSrpcModuleInit()) {
-    gold_fatal(_("NaClSrpcModuleInit failed\n"));
-  }
-  GetIRTInterface();
+  GetIRTInterfaces();
 
-  // Start the message loop to process SRPCs.
-  // It usually never terminates unless killed.
-  const struct NaClSrpcHandlerDesc srpc_methods[] = {
-    { "RunWithSplit:ihhhhhhhhhhhhhhhhh:", SrpcRunWithSplit },
-    { NULL, NULL },
-  };
+  g_irt_translator_link.serve_link_request(HandleLinkRequest);
 
-  if (!NaClSrpcAcceptClientConnection(srpc_methods)) {
-    gold_fatal(_("NaClSrpcAcceptClientConnection failed\n"));
-  }
-
-  NaClSrpcModuleFini();
   return 0;
 }
