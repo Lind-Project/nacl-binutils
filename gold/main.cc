@@ -134,8 +134,9 @@ write_debug_script(std::string, const char*, const char*)
 #endif // !defined(DEBUG)
 
 // @LOCALMOD-SB-BEGIN
-// For the SRPC build, main() is defined in nacl_file.cc and runs the SRPC
-// main loop. gold_main() is called by the RPC handler.
+// For the in-browser sandboxed build, main() is defined in
+// nacl_file.cc and calls an IRT interface for handling the browser's
+// request.  gold_main() is called by that request handler.
 #if 0 && defined(__native_client__)
 int
 gold_main(int argc, char** argv)
@@ -158,7 +159,7 @@ main(int argc, char** argv)
   program_name = argv[0];
 
   // In libiberty; expands @filename to the args in "filename".
-  // @LOCALMOD-SB: skip this in SRPC mode since the commandline we
+  // @LOCALMOD-SB: skip this in sandboxed mode since the commandline we
   // build will likely not have @filename (and we can avoid hijacking
   // the file open operation there).
 #if 1 || !defined(__native_client__)
@@ -338,7 +339,8 @@ main(int argc, char** argv)
     gold_error("treating warnings as errors");
 
   // @LOCALMOD-SB-BEGIN
-  // This function is called via SRPC - we do not want it to exit
+  // This function is called from an IPC request handler.  We do not
+  // want it to exit.
 #if 0 && defined(__native_client__)
   return errors.error_count() > 0;
 #else
