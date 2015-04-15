@@ -36,6 +36,7 @@
 #include "bfdlink.h"
 #include "genlink.h"
 #include "elf-bfd.h"
+#include "elf-nacl.h"
 #include "elfxx-mips.h"
 #include "elf/mips.h"
 #include "elf-vxworks.h"
@@ -2533,6 +2534,34 @@ static const struct ecoff_debug_swap mips_elf32_ecoff_debug_swap = {
 
 /* Include the target file again for this target.  */
 #include "elf32-target.h"
+
+/* Native Client targets. */
+
+#undef  TARGET_LITTLE_SYM
+#define TARGET_LITTLE_SYM               mips_elf32_nacl_le_vec
+#undef  TARGET_LITTLE_NAME
+#define TARGET_LITTLE_NAME              "elf32-tradlittlemips-nacl"
+#undef  TARGET_BIG_SYM
+#define TARGET_BIG_SYM                  mips_elf32_nacl_be_vec
+#undef  TARGET_BIG_NAME
+#define TARGET_BIG_NAME                 "elf32-tradbigmips-nacl"
+
+#undef  elf32_bed
+#define elf32_bed elf32_mips_nacl_bed
+
+#undef  elf_backend_modify_segment_map
+#define elf_backend_modify_segment_map          nacl_modify_segment_map
+#undef  elf_backend_modify_program_headers
+#define elf_backend_modify_program_headers      nacl_modify_program_headers
+
+#undef  ELF_MAXPAGESIZE
+#define ELF_MAXPAGESIZE                 0x10000
+
+#include "elf32-target.h"
+
+/* Restore defaults.  */
+#undef  elf_backend_modify_segment_map
+#undef  elf_backend_modify_program_headers
 
 /* FreeBSD support.  */
 

@@ -431,6 +431,7 @@ ALL_64_EMULATION_SOURCES = \
 	eelf32bmipn32.c \
 	eelf32bsmip.c \
 	eelf32btsmip.c \
+	eelf32btsmip_nacl.c \
 	eelf32btsmip_fbsd.c \
 	eelf32btsmipn32.c \
 	eelf32btsmipn32_fbsd.c \
@@ -444,6 +445,7 @@ ALL_64_EMULATION_SOURCES = \
 	eelf32lr5900n32.c \
 	eelf32lsmip.c \
 	eelf32ltsmip.c \
+	eelf32ltsmip_nacl.c \
 	eelf32ltsmip_fbsd.c \
 	eelf32ltsmipn32.c \
 	eelf32ltsmipn32_fbsd.c \
@@ -1118,6 +1120,7 @@ eelf32ltsmip_fbsd.c: $(srcdir)/emulparams/elf32ltsmip_fbsd.sh \
   $(srcdir)/emulparams/elf32btsmip.sh $(srcdir)/emulparams/elf32bmip.sh \
   $(ELF_DEPS) $(srcdir)/emultempl/mipself.em $(srcdir)/scripttempl/elf.sc \
   ${GEN_DEPENDS}
+
 
 eelf32ltsmipn32.c: $(srcdir)/emulparams/elf32ltsmipn32.sh \
   $(srcdir)/emulparams/elf32btsmipn32.sh \
@@ -1853,6 +1856,11 @@ eelf64btsmip_fbsd.c: $(srcdir)/emulparams/elf64btsmip_fbsd.sh \
   $(srcdir)/emulparams/elf32bmipn32-defs.sh $(ELF_DEPS) \
   $(srcdir)/emultempl/mipself.em $(srcdir)/scripttempl/elf.sc ${GEN_DEPENDS}
 
+eelf32btsmip_nacl.c: $(srcdir)/emulparams/elf32btsmip_nacl.sh \
+  $(srcdir)/emulparams/elf32bmip_nacl.sh $(ELF_DEPS) \
+  $(srcdir)/emultempl/mipself.em $(srcdir)/scripttempl/elf.sc ${GEN_DEPENDS}
+	${GENSCRIPTS} elf32btsmip_nacl "$(tdir_elf32btsmip_nacl)"
+
 eelf64hppa.c: $(srcdir)/emulparams/elf64hppa.sh \
   $(ELF_DEPS) $(srcdir)/scripttempl/elf64hppa.sc ${GEN_DEPENDS}
 
@@ -1870,6 +1878,12 @@ eelf64ltsmip_fbsd.c: $(srcdir)/emulparams/elf64ltsmip_fbsd.sh \
   $(srcdir)/emulparams/elf64btsmip_fbsd.sh $(srcdir)/emulparams/elf64bmip-defs.sh \
   $(srcdir)/emulparams/elf32bmipn32-defs.sh $(ELF_DEPS) \
   $(srcdir)/emultempl/mipself.em $(srcdir)/scripttempl/elf.sc ${GEN_DEPENDS}
+
+eelf32ltsmip_nacl.c: $(srcdir)/emulparams/elf32ltsmip_nacl.sh \
+  $(srcdir)/emulparams/elf32btsmip.sh $(srcdir)/emulparams/elf32bmip.sh \
+  $(ELF_DEPS) $(srcdir)/emultempl/mipself.em $(srcdir)/scripttempl/elf.sc \
+  ${GEN_DEPENDS}
+	${GENSCRIPTS} elf32ltsmip_nacl "$(tdir_elf32ltsmip_nacl)"
 
 eelf64mmix.c: $(srcdir)/emulparams/elf64mmix.sh \
   $(ELF_DEPS) $(srcdir)/emultempl/mmix-elfnmmo.em \

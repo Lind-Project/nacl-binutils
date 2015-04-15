@@ -743,6 +743,8 @@ extern const bfd_target mips_elf64_trad_be_vec;
 extern const bfd_target mips_elf64_trad_le_vec;
 extern const bfd_target mips_elf64_tradfbsd_be_vec;
 extern const bfd_target mips_elf64_tradfbsd_le_vec;
+extern const bfd_target mips_elf32_nacl_le_vec;
+extern const bfd_target mips_elf32_nacl_be_vec;
 extern const bfd_target mips_pe_le_vec;
 extern const bfd_target mips_pei_le_vec;
 extern const bfd_target mmix_elf64_vec;

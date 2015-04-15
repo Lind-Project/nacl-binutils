@@ -984,6 +984,18 @@ case "${targ}" in
     targ_defvec=mips_ecoff_be_vec
     targ_selvecs=mips_ecoff_le_vec
     ;;
+  mips*el-*-nacl)
+    targ_defvec=mips_elf32_nacl_le_vec
+    targ_selvecs="arm_elf32_nacl_le_vec i386_elf32_nacl_vec"
+    targ64_selvecs="x86_64_elf32_nacl_vec x86_64_elf64_nacl_vec"
+    targ_archs="$targ_archs bfd_i386_arch"
+    ;;
+  mips*-*-nacl*)
+    targ_defvec=mips_elf32_nacl_be_vec
+    targ_selvecs="arm_elf32_nacl_be_vec i386_elf32_nacl_vec"
+    targ64_selvecs="x86_64_elf32_nacl_vec x86_64_elf64_nacl_vec"
+    targ_archs="$targ_archs bfd_i386_arch"
+    ;;
 #ifdef BFD64
   mips*-*-irix6*)
     targ_defvec=mips_elf32_n_be_vec

@@ -867,6 +867,8 @@ do
     mips_elf64_trad_le_vec)	 tb="$tb elf64-mips.lo elf64.lo elfxx-mips.lo elf-vxworks.lo elf32.lo $elf ecofflink.lo"; target_size=64 ;;
     mips_elf64_tradfbsd_be_vec)  tb="$tb elf64-mips.lo elf64.lo elfxx-mips.lo elf-vxworks.lo elf32.lo $elf ecofflink.lo"; target_size=64 ;;
     mips_elf64_tradfbsd_le_vec)  tb="$tb elf64-mips.lo elf64.lo elfxx-mips.lo elf-vxworks.lo elf32.lo $elf ecofflink.lo"; target_size=64 ;;
+    mips_elf32_nacl_le_vec) tb="$tb elf32-mips.lo elfxx-mips.lo elf-nacl.lo elf-vxworks.lo elf32.lo $elf ecofflink.lo" ;;
+    mips_elf32_nacl_be_vec) tb="$tb elf32-mips.lo elfxx-mips.lo elf-nacl.lo elf-vxworks.lo elf32.lo $elf ecofflink.lo" ;;
     mips_pe_le_vec)		 tb="$tb pe-mips.lo peigen.lo cofflink.lo" ;;
     mips_pei_le_vec)		 tb="$tb pei-mips.lo peigen.lo cofflink.lo" ;;
     mmix_elf64_vec)		 tb="$tb elf64-mmix.lo elf64.lo $elf" target_size=64 ;;
