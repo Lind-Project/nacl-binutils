@@ -285,6 +285,16 @@ class Plugin_manager
   layout()
   { return this->layout_; }
 
+  // @LOCALMOD-BCLD-BEGIN
+  const char*
+  get_wrapped(unsigned int index) const
+  { return (index < wrapped_.size()) ? wrapped_[index].c_str() : NULL; }
+
+  unsigned int
+  get_num_wrapped() const
+  { return wrapped_.size(); }
+  // @LOCALMOD-BCLD-END
+
  private:
   Plugin_manager(const Plugin_manager&);
   Plugin_manager& operator=(const Plugin_manager&);
@@ -372,6 +382,11 @@ class Plugin_manager
   Dirsearch* dirpath_;
   Mapfile* mapfile_;
   Task_token* this_blocker_;
+
+  // @LOCALMOD-BCLD-BEGIN
+  // This is computed in all_symbols_read().
+  std::vector<std::string> wrapped_; // List of wrapped symbols
+  // @LOCALMOD-BCLD-END
 
   // An extra directory to seach for the libraries passed by
   // add_input_library.

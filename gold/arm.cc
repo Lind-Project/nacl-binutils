@@ -12382,8 +12382,12 @@ class Target_selector_arm_nacl
 	  big_endian ? "armelfb_nacl" : "armelf_nacl")
   { }
 };
-
+// @LOCALMOD-SB-BEGIN
+#ifdef HAVE_TARGET_32_LITTLE
 Target_selector_arm_nacl<false> target_selector_arm;
+#endif
+#ifdef HAVE_TARGET_32_BIG
 Target_selector_arm_nacl<true> target_selector_armbe;
-
+#endif
+// @LOCALMOD-SB-END
 } // End anonymous namespace.

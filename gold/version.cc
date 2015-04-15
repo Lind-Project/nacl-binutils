@@ -25,7 +25,11 @@
 #include <string>
 #include <cstdio>
 
-#include "../bfd/bfdver.h"
+// @LOCALMOD-SB-BEGIN
+// Break silly deps on libbfd
+//#include "../bfd/bfdver.h"
+#define BFD_VERSION_STRING "2.23 (pnacl modified)"
+// @LOCALMOD-SB-END
 
 namespace gold
 {

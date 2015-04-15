@@ -44,6 +44,14 @@ if THREADS
 THREADSLIB = -lpthread
 endif
 
+if NACLSRPC
+NACLSRPCLIBS = -lsrpc -lplatform -limc -limc_syscalls -lgio -lpthread
+else
+if LINUX
+NACLLDFLAGS = -Wl,-rpath='$$ORIGIN/../lib'
+endif
+endif
+
 AM_YFLAGS = -d
 
 # Automake 1.10+ disables lex and yacc output file regeneration if
@@ -178,13 +186,17 @@ libgold_a_LIBADD = $(LIBOBJS)
 sources_var = main.cc
 deps_var = $(TARGETOBJS) libgold.a $(LIBIBERTY) $(LIBINTL_DEP)
 ldadd_var = $(TARGETOBJS) libgold.a $(LIBIBERTY) $(GOLD_LDADD) $(LIBINTL) \
-	 $(THREADSLIB) $(LIBDL)
+	 $(NACLSRPCLIBS) $(THREADSLIB) $(LIBDL)
 ldflags_var = $(GOLD_LDFLAGS)
 
-ld_new_SOURCES = $(sources_var)
+if NACLSRPC
+  NACLSRPC_SOURCES = nacl_file.cc
+endif
+
+ld_new_SOURCES = $(sources_var) $(NACLSRPC_SOURCES)
 ld_new_DEPENDENCIES = $(deps_var)
-ld_new_LDADD = $(ldadd_var)
-ld_new_LDFLAGS = $(ldflags_var)
+ld_new_LDADD = $(ldadd_var) $(NACLSRPCLIBS)
+ld_new_LDFLAGS = $(ldflags_var) $(NACLLDFLAGS)
 
 EXTRA_ld_new_SOURCES = $(TARGETSOURCES)
 

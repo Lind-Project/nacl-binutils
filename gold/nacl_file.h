@@ -1,7 +1,7 @@
-// defstd.h -- define standard symbols for gold   -*- C++ -*-
+// nacl_file.h -- handle file lookups for NaCl version of gold  -*- C++ -*-
 
-// Copyright (C) 2006-2014 Free Software Foundation, Inc.
-// Written by Ian Lance Taylor <iant@google.com>.
+// Copyright 2012 Free Software Foundation, Inc.
+// Written by the Native Client authors.
 
 // This file is part of gold.
 
@@ -20,24 +20,20 @@
 // Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
 // MA 02110-1301, USA.
 
-#ifndef GOLD_DEFSTD_H
-#define GOLD_DEFSTD_H
 
-#include <string> // @LOCALMOD-BCLD
-#include <set> // @LOCALMOD-BCLD
-#include "symtab.h"
+#ifndef NACL_FILE_H
+#define NACL_FILE_H
 
-namespace gold
+namespace nacl_file
 {
+// Look up an input file (possibly via the reverse-service channel).
+extern int NaClOpenFileDescriptor(const char *filename);
 
-extern void
-define_standard_symbols(Symbol_table*, const Layout*);
+// Tell the subsystem that the descriptor is no longer uused.
+// Note: this is currently little more than a dummy.
+extern void NaClReleaseFileDescriptor(int fd);
 
-// @LOCALMOD-BCLD-BEGIN
-extern void
-get_standard_symbols(std::set<std::string> &symbols);
-// @LOCALMOD-BCLD-END
+} // End namespace nacl_file.
 
-} // End namespace gold.
 
-#endif // !defined(GOLD_DEFSTD_H)
+#endif  // NACL_FILE_H

@@ -1166,6 +1166,18 @@ class General_options
   DEFINE_uint64(Trodata_segment, options::ONE_DASH, '\0', -1U,
 		N_("Set the address of the rodata segment"), N_("ADDRESS"));
 
+ // @LOCALMOD-BCLD-BEGIN
+  DEFINE_bool(undef_sym_check, options::TWO_DASHES, '\0', false,
+              N_("Check for undefined symbols before plugin replacement phase"),
+              N_("Don't check for undefined symbols before plugin replacement"
+                 " phase (default)"));
+
+  // This option marks the given symbol as "allowed to be unresolved"
+  // for the sake of the undef-sym-check done for bitcode linking.
+  DEFINE_set(allow_unresolved, options::TWO_DASHES, '\0',
+       N_("Allow unresolved references to SYMBOL"), N_("SYMBOL"));
+  // @LOCALMOD-BCLD-END
+
   DEFINE_bool(toc_optimize, options::TWO_DASHES, '\0', true,
 	      N_("(PowerPC64 only) Optimize TOC code sequences"),
 	      N_("(PowerPC64 only) Don't optimize TOC code sequences"));

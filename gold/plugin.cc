@@ -105,6 +105,14 @@ get_view(const void *handle, const void **viewp);
 static enum ld_plugin_status
 release_input_file(const void *handle);
 
+// @LOCALMOD-BCLD-BEGIN
+static enum ld_plugin_status
+get_wrapped(unsigned int index, const char **wrapped);
+
+static enum ld_plugin_status
+get_num_wrapped(unsigned *num);
+// @LOCALMOD-BCLD-END
+
 static enum ld_plugin_status
 get_symbols(const void *handle, int nsyms, struct ld_plugin_symbol *syms);
 
@@ -199,7 +207,7 @@ Plugin::load()
   sscanf(ver, "%d.%d", &major, &minor);
 
   // Allocate and populate a transfer vector.
-  const int tv_fixed_size = 26;
+  const int tv_fixed_size = 28; // @LOCALMOD-BCLD
 
   int tv_size = this->args_.size() + tv_fixed_size;
   ld_plugin_tv* tv = new ld_plugin_tv[tv_size];
@@ -275,6 +283,16 @@ Plugin::load()
   ++i;
   tv[i].tv_tag = LDPT_GET_SYMBOLS_V2;
   tv[i].tv_u.tv_get_symbols = get_symbols_v2;
+
+  // @LOCALMOD-BCLD-BEGIN
+  ++i;
+  tv[i].tv_tag = LDPT_GET_WRAPPED;
+  tv[i].tv_u.tv_get_wrapped = get_wrapped;
+
+  ++i;
+  tv[i].tv_tag = LDPT_GET_NUM_WRAPPED;
+  tv[i].tv_u.tv_get_num_wrapped = get_num_wrapped;
+  // @LOCALMOD-BCLD-END
 
   ++i;
   tv[i].tv_tag = LDPT_ADD_INPUT_FILE;
@@ -527,6 +545,16 @@ Plugin_manager::all_symbols_read(Workqueue* workqueue, Task* task,
   this->dirpath_ = dirpath;
   this->mapfile_ = mapfile;
   this->this_blocker_ = NULL;
+
+  // @LOCALMOD-BCLD-BEGIN
+  // Create a list of wrapped symbols to export to the plugin.
+  wrapped_.clear();
+  for (options::String_set::const_iterator
+       it = parameters->options().wrap_begin(),
+       ie = parameters->options().wrap_end(); it != ie; ++it) {
+    wrapped_.push_back(*it);
+  }
+  // @LOCALMOD-BCLD-END
 
   for (this->current_ = this->plugins_.begin();
        this->current_ != this->plugins_.end();
@@ -1499,6 +1527,24 @@ get_view(const void *handle, const void **viewp)
       static_cast<unsigned int>(reinterpret_cast<intptr_t>(handle));
   return parameters->options().plugins()->get_view(obj_index, viewp);
 }
+
+// @LOCALMOD-BCLD-BEGIN
+static enum ld_plugin_status
+get_wrapped(unsigned int index, const char **wrapped)
+{
+  gold_assert(parameters->options().has_plugins());
+  *wrapped = parameters->options().plugins()->get_wrapped(index);
+  return *wrapped ? LDPS_OK : LDPS_ERR;
+}
+
+static enum ld_plugin_status
+get_num_wrapped(unsigned *num)
+{
+  gold_assert(parameters->options().has_plugins());
+  *num = parameters->options().plugins()->get_num_wrapped();
+  return LDPS_OK;
+}
+// @LOCALMOD-BCLD-END
 
 // Get the symbol resolution info for a plugin-claimed input file.
 

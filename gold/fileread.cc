@@ -41,6 +41,7 @@
 
 #include "debug.h"
 #include "parameters.h"
+#include "nacl_file.h" // @LOCALMOD-SB
 #include "options.h"
 #include "dirsearch.h"
 #include "target.h"
@@ -178,7 +179,13 @@ File_read::~File_read()
   gold_assert(this->token_.is_writable());
   if (this->is_descriptor_opened_)
     {
+      // @LOCALMOD-SB-BEGIN
+#if defined(__native_client__)
+      nacl_file::NaClReleaseFileDescriptor(this->descriptor_);
+#else
       release_descriptor(this->descriptor_, true);
+#endif
+      // @LOCALMOD-SB-END
       this->descriptor_ = -1;
       this->is_descriptor_opened_ = false;
     }
@@ -197,8 +204,14 @@ File_read::open(const Task* task, const std::string& name)
 	      && this->name_.empty());
   this->name_ = name;
 
+  // @LOCALMOD-SB-BEGIN
+#if defined(__native_client__)
+  this->descriptor_ = nacl_file::NaClOpenFileDescriptor(this->name_.c_str());
+#else
   this->descriptor_ = open_descriptor(-1, this->name_.c_str(),
 				      O_RDONLY);
+#endif
+  // @LOCALMOD-SB-END
 
   if (this->descriptor_ >= 0)
     {
@@ -242,9 +255,16 @@ File_read::reopen_descriptor()
 {
   if (!this->is_descriptor_opened_)
     {
+
+      // @LOCALMOD-SB-BEGIN
+#if defined(__native_client__)
+      this->descriptor_ = nacl_file::NaClOpenFileDescriptor(this->name_.c_str());
+#else
       this->descriptor_ = open_descriptor(this->descriptor_,
 					  this->name_.c_str(),
 					  O_RDONLY);
+#endif
+      // @LOCALMOD-SB-END
       if (this->descriptor_ < 0)
 	gold_fatal(_("could not reopen file %s"), this->name_.c_str());
       this->is_descriptor_opened_ = true;
@@ -279,7 +299,13 @@ File_read::release()
       this->clear_views(CLEAR_VIEWS_NORMAL);
       if (this->is_descriptor_opened_)
 	{
+          // @LOCALMOD-SB-BEGIN
+#if defined(__native_client__)
+          nacl_file::NaClReleaseFileDescriptor(this->descriptor_);
+#else
 	  release_descriptor(this->descriptor_, false);
+#endif
+          // @LOCALMOD-SB-END
 	  this->is_descriptor_opened_ = false;
 	}
     }

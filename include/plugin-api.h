@@ -210,6 +210,21 @@ enum ld_plugin_status
 (*ld_plugin_add_symbols) (void *handle, int nsyms,
                           const struct ld_plugin_symbol *syms);
 
+// @LOCALMOD-BCLD-BEGIN
+
+/* The linker's interface for getting the i'th wrapped symbol name.
+   Returns LDPS_ERR if index >= num_wrapped. */
+typedef
+enum ld_plugin_status
+(*ld_plugin_get_wrapped) (unsigned int index, const char **wrapped);
+
+/* The linker's interface for getting the number of wrapped symbols. */
+typedef
+enum ld_plugin_status
+(*ld_plugin_get_num_wrapped) (unsigned *num);
+
+// @LOCALMOD-BCLD-END
+
 /* The linker's interface for getting the input file information with
    an open (possibly re-opened) file descriptor.  */
 
@@ -384,7 +399,11 @@ enum ld_plugin_tag
   LDPT_ALLOW_SECTION_ORDERING = 24,
   LDPT_GET_SYMBOLS_V2 = 25,
   LDPT_ALLOW_UNIQUE_SEGMENT_FOR_SECTIONS = 26,
-  LDPT_UNIQUE_SEGMENT_FOR_SECTIONS = 27
+  LDPT_UNIQUE_SEGMENT_FOR_SECTIONS = 27,
+  // @LOCALMOD-BCLD-BEGIN
+  LDPT_GET_WRAPPED = 28,
+  LDPT_GET_NUM_WRAPPED = 29
+  // @LOCALMOD-BCLD-END
 };
 
 /* The plugin transfer vector.  */
@@ -401,6 +420,10 @@ struct ld_plugin_tv
     ld_plugin_register_cleanup tv_register_cleanup;
     ld_plugin_add_symbols tv_add_symbols;
     ld_plugin_get_symbols tv_get_symbols;
+    // @LOCALMOD-BCLD-BEGIN
+    ld_plugin_get_wrapped tv_get_wrapped;
+    ld_plugin_get_num_wrapped tv_get_num_wrapped;
+    // @LOCALMOD-BCLD-END
     ld_plugin_add_input_file tv_add_input_file;
     ld_plugin_message tv_message;
     ld_plugin_get_input_file tv_get_input_file;

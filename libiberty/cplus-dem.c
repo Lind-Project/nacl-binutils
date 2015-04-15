@@ -847,6 +847,10 @@ cplus_demangle_name_to_style (const char *name)
 char *
 cplus_demangle (const char *mangled, int options)
 {
+/* @LOCALMOD-BEGIN: prune out demangling support. */
+#if defined(__native_client__)
+  return xstrdup (mangled);
+#else
   char *ret;
   struct work_stuff work[1];
 
@@ -886,6 +890,8 @@ cplus_demangle (const char *mangled, int options)
   ret = internal_cplus_demangle (work, mangled);
   squangle_mop_up (work);
   return (ret);
+#endif
+/* @LOCALMOD-END */
 }
 
 /* Demangle ada names.  The encoding is documented in gcc/ada/exp_dbug.ads.  */

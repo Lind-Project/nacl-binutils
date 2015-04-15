@@ -88,6 +88,11 @@ Symbol::init_fields(const char* name, const char* version,
 static std::string
 demangle(const char* name)
 {
+// @LOCALMOD-BEGIN: Prune out demangling support in log messages,
+// since stable PNaCl pexes don't have symbol names.
+#if defined(__native_client__)
+  return name;
+#else
   if (!parameters->options().do_demangle())
     return name;
 
@@ -100,6 +105,8 @@ demangle(const char* name)
   std::string retval(demangled_name);
   free(demangled_name);
   return retval;
+#endif
+// @LOCALMOD-END
 }
 
 std::string
@@ -2812,6 +2819,38 @@ Symbol_table::sized_finalize_symbol(Symbol* unsized_sym)
 
   return true;
 }
+
+// @LOCALMOD-BCLD-BEGIN
+void
+Symbol_table::assert_no_undefined_symbols(
+    const std::set<std::string> &exceptions) const
+{
+  const char* const real_prefix = "__real_";
+  int undef_count = 0;
+  for (Symbol_table_type::const_iterator p = this->table_.begin();
+       p != this->table_.end();
+       ++p)
+    {
+      Symbol *sym = p->second;
+      if (sym->is_undefined() &&
+          sym->in_reg() &&
+          sym->binding() != elfcpp::STB_WEAK &&
+          exceptions.count(sym->name()) == 0 &&
+          // @TODO(pdox): If --wrap is to be a supported user-visible feature,
+          // then it should be implemented properly in the LLVM plugin.
+          // For now, since we need to use --wrap for the self-build, just
+          // ignore the undefined symbols that result from --wrap.
+          strncmp(sym->name(), real_prefix, strlen(real_prefix)) != 0)
+        {
+          gold_undefined_symbol(sym);
+          undef_count++;
+        }
+    }
+  if (undef_count > 0) {
+    gold_exit(GOLD_ERR);
+  }
+}
+// @LOCALMOD-BCLD-END
 
 // Write out the global symbols.
 

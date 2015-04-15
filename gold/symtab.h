@@ -26,6 +26,7 @@
 #ifndef GOLD_SYMTAB_H
 #define GOLD_SYMTAB_H
 
+#include <set> // @LOCALMOD-BCLD
 #include <string>
 #include <utility>
 #include <vector>
@@ -1493,6 +1494,11 @@ class Symbol_table
   // Return the real symbol associated with the forwarder symbol FROM.
   Symbol*
   resolve_forwards(const Symbol* from) const;
+
+  // @LOCALMOD-BCLD-BEGIN
+  void
+  assert_no_undefined_symbols(const std::set<std::string> &exceptions) const;
+  // @LOCALMOD-BCLD-END
 
   // Return the sized version of a symbol in this table.
   template<int size>

@@ -32,7 +32,11 @@
 #include "filenames.h"
 #include "libiberty.h"
 #include "demangle.h"
-#include "../bfd/bfdver.h"
+// @LOCALMOD-SB-BEGIN
+// Break silly deps on libbfd
+//#include "../bfd/bfdver.h"
+#define REPORT_BUGS_TO "https://code.google.com/p/nativeclient/issues/entry"
+// @LOCALMOD-SB-END
 
 #include "debug.h"
 #include "script.h"

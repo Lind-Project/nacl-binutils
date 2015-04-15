@@ -4905,6 +4905,9 @@ class Target_selector_x86_64_nacl
 };
 
 Target_selector_x86_64_nacl<64> target_selector_x86_64;
+// @LOCALMOD-SB-BEGIN
+#ifdef HAVE_TARGET_32_LITTLE
 Target_selector_x86_64_nacl<32> target_selector_x32;
-
+#endif
+// @LOCALMOD-SB-END
 } // End anonymous namespace.
