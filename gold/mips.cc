@@ -10562,10 +10562,7 @@ class Target_selector_mips_nacl
         "mipsel", "elf32-tradlittlemips-nacl", "elf32-tradlittlemips-nacl")
   { }
 };
-
-Target_selector_mips_nacl<32, true> target_selector_mips32;
+// @LOCALMOD-SB-BEGIN
 Target_selector_mips_nacl<32, false> target_selector_mips32el;
-Target_selector_mips_nacl<64, true> target_selector_mips64;
-Target_selector_mips_nacl<64, false> target_selector_mips64el;
-
+// @LOCALMOD-SB-END
 } // End anonymous namespace.

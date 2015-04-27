@@ -131,7 +131,7 @@ class Target_selector
   // Return the BFD name.  This may return NULL, in which case the
   // do_recognize_by_bfd_name hook will be responsible for matching
   // the BFD name.
-  const char*
+  virtual/*@LOCALMOD*/ const char*
   bfd_name() const
   { return this->bfd_name_; }
 
