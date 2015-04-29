@@ -422,7 +422,7 @@ AM_CPPFLAGS = \
 LIBIBERTY = ../libiberty/libiberty.a
 @PLUGINS_TRUE@LIBDL = @DLOPEN_LIBS@
 @THREADS_TRUE@THREADSLIB = -lpthread
-@NACLSRPC_TRUE@NACLSRPCLIBS = -lsrpc -lplatform -limc -limc_syscalls -lgio -lpthread
+@NACLSRPC_TRUE@NACLSRPCLIBS =
 @LINUX_TRUE@@NACLSRPC_FALSE@NACLLDFLAGS = -Wl,-rpath='$$ORIGIN/../lib'
 AM_YFLAGS = -d
 

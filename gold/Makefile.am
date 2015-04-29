@@ -45,7 +45,7 @@ THREADSLIB = -lpthread
 endif
 
 if NACLSRPC
-NACLSRPCLIBS = -lsrpc -lplatform -limc -limc_syscalls -lgio -lpthread
+NACLSRPCLIBS =
 else
 if LINUX
 NACLLDFLAGS = -Wl,-rpath='$$ORIGIN/../lib'
