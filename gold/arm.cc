@@ -1,6 +1,6 @@
 // arm.cc -- arm target support for gold.
 
-// Copyright 2009, 2010, 2011, 2012, 2013 Free Software Foundation, Inc.
+// Copyright (C) 2009-2015 Free Software Foundation, Inc.
 // Written by Doug Kwan <dougkwan@google.com> based on the i386 code
 // by Ian Lance Taylor <iant@google.com>.
 // This file also contains borrowed and adapted code from
@@ -6683,7 +6683,7 @@ void
 Arm_relobj<big_endian>::do_read_symbols(Read_symbols_data* sd)
 {
   // Call parent class to read symbol information.
-  Sized_relobj_file<32, big_endian>::do_read_symbols(sd);
+  this->base_read_symbols(sd);
 
   // If this input file is a binary file, it has no processor
   // specific flags and attributes section.
@@ -6974,7 +6974,7 @@ void
 Arm_dynobj<big_endian>::do_read_symbols(Read_symbols_data* sd)
 {
   // Call parent class to read symbol information.
-  Sized_dynobj<32, big_endian>::do_read_symbols(sd);
+  this->base_read_symbols(sd);
 
   // Read processor-specific flags in ELF file header.
   const unsigned char* pehdr = this->get_view(elfcpp::file_header_offset,
@@ -8301,7 +8301,8 @@ Target_arm<big_endian>::Scan::global(Symbol_table* symtab,
 	// Make a dynamic relocation if necessary.
 	if (gsym->needs_dynamic_reloc(Scan::get_reference_flags(r_type)))
 	  {
-	    if (gsym->may_need_copy_reloc())
+	    if (!parameters->options().output_is_position_independent()
+		&& gsym->may_need_copy_reloc())
 	      {
 		target->copy_reloc(symtab, layout, object,
 				   data_shndx, output_section, gsym, reloc);
@@ -8382,7 +8383,8 @@ Target_arm<big_endian>::Scan::global(Symbol_table* symtab,
 	// Make a dynamic relocation if necessary.
 	if (gsym->needs_dynamic_reloc(Scan::get_reference_flags(r_type)))
 	  {
-	    if (target->may_need_copy_reloc(gsym))
+	    if (parameters->options().output_is_executable()
+		&& target->may_need_copy_reloc(gsym))
 	      {
 		target->copy_reloc(symtab, layout, object,
 				   data_shndx, output_section, gsym, reloc);
@@ -10054,7 +10056,7 @@ Target_arm<big_endian>::do_adjust_elf_header(
     if (type == elfcpp::ET_EXEC || type == elfcpp::ET_DYN)
       {
 	Object_attribute* attr = this->get_aeabi_object_attribute(elfcpp::Tag_ABI_VFP_args);
-	if (attr->int_value())
+	if (attr->int_value() == elfcpp::AEABI_VFP_args_vfp)
 	  flags |= elfcpp::EF_ARM_ABI_FLOAT_HARD;
 	else
 	  flags |= elfcpp::EF_ARM_ABI_FLOAT_SOFT;
@@ -10491,10 +10493,18 @@ Target_arm<big_endian>::merge_object_attributes(
       != out_attr[elfcpp::Tag_ABI_VFP_args].int_value())
     {
       // Ignore mismatches if the object doesn't use floating point.  */
-      if (out_attr[elfcpp::Tag_ABI_FP_number_model].int_value() == 0)
+      if (out_attr[elfcpp::Tag_ABI_FP_number_model].int_value()
+	  == elfcpp::AEABI_FP_number_model_none
+	  || (in_attr[elfcpp::Tag_ABI_FP_number_model].int_value()
+	      != elfcpp::AEABI_FP_number_model_none
+	      && out_attr[elfcpp::Tag_ABI_VFP_args].int_value()
+		 == elfcpp::AEABI_VFP_args_compatible))
 	out_attr[elfcpp::Tag_ABI_VFP_args].set_int_value(
 	    in_attr[elfcpp::Tag_ABI_VFP_args].int_value());
-      else if (in_attr[elfcpp::Tag_ABI_FP_number_model].int_value() != 0
+      else if (in_attr[elfcpp::Tag_ABI_FP_number_model].int_value()
+	       != elfcpp::AEABI_FP_number_model_none
+	       && in_attr[elfcpp::Tag_ABI_VFP_args].int_value()
+		  != elfcpp::AEABI_VFP_args_compatible
 	       && parameters->options().warn_mismatch())
 	gold_error(_("%s uses VFP register arguments, output does not"),
 		   name);

@@ -1,5 +1,5 @@
 /* dwarf.h - DWARF support header file
-   Copyright 2005-2013 Free Software Foundation, Inc.
+   Copyright (C) 2005-2015 Free Software Foundation, Inc.
 
    This file is part of GNU Binutils.
 
@@ -164,6 +164,8 @@ struct dwarf_section
   dwarf_vma address;
   dwarf_size_type size;
   enum dwarf_section_display_enum abbrev_sec;
+  /* A spare field for random use.  */
+  void *user_data;
 };
 
 /* A structure containing the name of a debug section
@@ -235,6 +237,7 @@ extern int dwarf_check;
 extern void init_dwarf_regnames (unsigned int);
 extern void init_dwarf_regnames_i386 (void);
 extern void init_dwarf_regnames_x86_64 (void);
+extern void init_dwarf_regnames_aarch64 (void);
 
 extern int load_debug_section (enum dwarf_section_display_enum, void *);
 extern void free_debug_section (enum dwarf_section_display_enum);
@@ -245,10 +248,11 @@ extern void dwarf_select_sections_by_names (const char *);
 extern void dwarf_select_sections_by_letters (const char *);
 extern void dwarf_select_sections_all (void);
 
-unsigned int * find_cu_tu_set (void *, unsigned int);
+extern unsigned int * find_cu_tu_set (void *, unsigned int);
 
-void * cmalloc (size_t, size_t);
-void * xcmalloc (size_t, size_t);
-void * xcrealloc (void *, size_t, size_t);
+extern void * cmalloc (size_t, size_t);
+extern void * xcalloc2 (size_t, size_t);
+extern void * xcmalloc (size_t, size_t);
+extern void * xcrealloc (void *, size_t, size_t);
 
 extern dwarf_vma read_leb128 (unsigned char *, unsigned int *, bfd_boolean, const unsigned char * const);

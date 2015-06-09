@@ -189,7 +189,7 @@ json_append_file_list (struct json_manifest_reader *r,
                        const char *original_name,
                        const char *name)
 {
-  struct file_list *curr = XZALLOC (struct file_list);
+  struct file_list *curr = xzalloc (sizeof(struct file_list));
 
   if (strlen(original_name) >= MANIFEST_MAX_STRING_SIZE)
     error (_("Original file name in manifest is too long."));

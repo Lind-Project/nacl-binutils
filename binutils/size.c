@@ -1,7 +1,5 @@
 /* size.c -- report size of various sections of an executable file.
-   Copyright 1991, 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999, 2000,
-   2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009
-   Free Software Foundation, Inc.
+   Copyright (C) 1991-2015 Free Software Foundation, Inc.
 
    This file is part of GNU Binutils.
 
@@ -367,7 +365,14 @@ display_archive (bfd *file)
       display_bfd (arfile);
 
       if (last_arfile != NULL)
-	bfd_close (last_arfile);
+	{
+	  bfd_close (last_arfile);
+
+	  /* PR 17512: file: a244edbc.  */
+	  if (last_arfile == arfile)
+	    return;
+	}
+
       last_arfile = arfile;
     }
 
