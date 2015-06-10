@@ -6536,6 +6536,7 @@ bfd_set_cacheable (bfd * abfd, bfd_boolean val)
   return TRUE;
 }
 
+
 typedef enum bfd_error
 {
   bfd_error_no_error = 0,
