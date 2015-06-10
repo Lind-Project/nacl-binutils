@@ -1,6 +1,6 @@
 /* Caching code for GDB, the GNU debugger.
 
-   Copyright (C) 1992-2014 Free Software Foundation, Inc.
+   Copyright (C) 1992-2015 Free Software Foundation, Inc.
 
    This file is part of GDB.
 
@@ -20,7 +20,6 @@
 #include "defs.h"
 #include "dcache.h"
 #include "gdbcmd.h"
-#include <string.h>
 #include "gdbcore.h"
 #include "target-dcache.h"
 #include "inferior.h"
@@ -468,9 +467,16 @@ dcache_init (void)
    fills the cache.  Arguments/return are like the target_xfer_partial
    interface.  */
 
+<<<<<<< HEAD
 int
 dcache_read_memory_partial (struct target_ops *ops, DCACHE *dcache,
 			    CORE_ADDR memaddr, gdb_byte *myaddr, ULONGEST len)
+=======
+enum target_xfer_status
+dcache_read_memory_partial (struct target_ops *ops, DCACHE *dcache,
+			    CORE_ADDR memaddr, gdb_byte *myaddr,
+			    ULONGEST len, ULONGEST *xfered_len)
+>>>>>>> gdb-7.9-branch
 {
   ULONGEST i;
 
@@ -494,7 +500,23 @@ dcache_read_memory_partial (struct target_ops *ops, DCACHE *dcache,
 	}
     }
 
+<<<<<<< HEAD
   return i == 0 ? -1 : i;
+=======
+  if (i == 0)
+    {
+      /* Even though reading the whole line failed, we may be able to
+	 read a piece starting where the caller wanted.  */
+      return ops->to_xfer_partial (ops, TARGET_OBJECT_MEMORY, NULL,
+				   myaddr, NULL, memaddr, len,
+				   xfered_len);
+    }
+  else
+    {
+      *xfered_len = i;
+      return TARGET_XFER_OK;
+    }
+>>>>>>> gdb-7.9-branch
 }
 
 /* FIXME: There would be some benefit to making the cache write-back and
@@ -511,14 +533,22 @@ dcache_read_memory_partial (struct target_ops *ops, DCACHE *dcache,
    memory.  */
 
 void
+<<<<<<< HEAD
 dcache_update (DCACHE *dcache, int status,
+=======
+dcache_update (DCACHE *dcache, enum target_xfer_status status,
+>>>>>>> gdb-7.9-branch
 	       CORE_ADDR memaddr, const gdb_byte *myaddr,
 	       ULONGEST len)
 {
   ULONGEST i;
 
   for (i = 0; i < len; i++)
+<<<<<<< HEAD
     if (status > 0)
+=======
+    if (status == TARGET_XFER_OK)
+>>>>>>> gdb-7.9-branch
       dcache_poke_byte (dcache, memaddr + i, myaddr + i);
     else
       {
@@ -668,7 +698,7 @@ set_dcache_command (char *arg, int from_tty)
 {
   printf_unfiltered (
      "\"set dcache\" must be followed by the name of a subcommand.\n");
-  help_list (dcache_set_list, "set dcache ", -1, gdb_stdout);
+  help_list (dcache_set_list, "set dcache ", all_commands, gdb_stdout);
 }
 
 static void

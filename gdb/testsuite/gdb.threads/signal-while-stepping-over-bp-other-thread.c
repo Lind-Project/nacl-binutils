@@ -1,6 +1,10 @@
 /* This testcase is part of GDB, the GNU debugger.
 
+<<<<<<< HEAD
    Copyright 2009-2014 Free Software Foundation, Inc.
+=======
+   Copyright 2009-2015 Free Software Foundation, Inc.
+>>>>>>> gdb-7.9-branch
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -22,7 +26,10 @@
 
 unsigned int args[2];
 
+<<<<<<< HEAD
 pid_t pid;
+=======
+>>>>>>> gdb-7.9-branch
 pthread_barrier_t barrier;
 pthread_t child_thread_2, child_thread_3;
 
@@ -38,6 +45,7 @@ callme (void)
 {
 }
 
+<<<<<<< HEAD
 void
 block_signals (void)
 {
@@ -56,6 +64,8 @@ unblock_signals (void)
   sigprocmask (SIG_UNBLOCK, &mask, NULL);
 }
 
+=======
+>>>>>>> gdb-7.9-branch
 void *
 child_function_3 (void *arg)
 {
@@ -79,8 +89,11 @@ child_function_2 (void *arg)
   int my_number =  (long) arg;
   volatile int *myp = (int *) &args[my_number];
 
+<<<<<<< HEAD
   unblock_signals ();
 
+=======
+>>>>>>> gdb-7.9-branch
   pthread_barrier_wait (&barrier);
 
   while (*myp > 0)
@@ -106,10 +119,13 @@ main ()
   int res;
   long i;
 
+<<<<<<< HEAD
   /* Block signals in all threads but one, so that we're sure which
      thread gets the signal we send from the command line.  */
   block_signals ();
 
+=======
+>>>>>>> gdb-7.9-branch
   signal (SIGUSR1, handler);
 
   /* Call these early so that PLTs for these are resolved soon,
@@ -120,10 +136,13 @@ main ()
 
   pthread_barrier_init (&barrier, NULL, 2);
 
+<<<<<<< HEAD
   /* The test uses this global to know where to send the signal
      to.  */
   pid = getpid ();
 
+=======
+>>>>>>> gdb-7.9-branch
   i = 0;
   args[i] = 1;
   res = pthread_create (&child_thread_2,
@@ -138,6 +157,11 @@ main ()
   pthread_barrier_wait (&barrier);
   callme (); /* set wait-thread-3 breakpoint here */
 
+<<<<<<< HEAD
+=======
+  pthread_kill (child_thread_2, SIGUSR1);
+
+>>>>>>> gdb-7.9-branch
   pthread_join (child_thread_2, NULL);
   pthread_join (child_thread_3, NULL);
 
