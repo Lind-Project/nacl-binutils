@@ -36,6 +36,8 @@
 #include <irt.h>
 #include <irt_dev.h>
 
+#include "native_client/src/untrusted/nacl/pnacl.h"
+
 #include "gold.h"
 
 using namespace gold;
@@ -104,7 +106,7 @@ int RunCommon(const std::vector<std::string>& arg_vec) {
 }
 
 // c.f.: pnacl/driver/nativeld.py
-const char* kDefaultCommandCommon[] = {
+const char* const kDefaultCommandCommon[] = {
   "gold",
   "--eh-frame-hdr",
   "-nostdlib",
@@ -112,11 +114,33 @@ const char* kDefaultCommandCommon[] = {
   "--no-fix-cortex-a8",
   "-o",
   FILENAME_OUTPUT,
-  0
+  NULL
 };
 
-const char* kDefaultCommandStatic[] = {
+// c.f.: pnacl/driver/{pnacl-translate,nativeld}.py
+const char* const kDefaultCommandNonSFI[] = {
+  // In addition to specifying the entry point, we also specify an undefined
+  // reference to _start, which is called by the shim's entry function,
+  // __pnacl_wrapper_start.
+  "--undefined=_start",
+  // "_begin" allows a PIE to find its load address in order to apply dynamic
+  // relocations.
+  "-defsym=_begin=0",
+  "-pie",
+  // Give an error if any TEXTRELs occur.
+  "-z", "text",
+  // Ensure we don't accidentally get READ_IMPLIES_EXEC behaviour when building
+  // Linux Non-SFI executables. Not really needed but kept for consistency.
+  "-z", "noexecstack",
+  NULL
+};
+
+const char* const kDefaultCommandStatic[] = {
   "-static",
+  NULL
+};
+
+const char* const kDefaultCommandFiles[] = {
   "crtbegin.o",
   FILENAME_OBJ,
   "@shim",
@@ -125,11 +149,11 @@ const char* kDefaultCommandStatic[] = {
   "libcrt_platform.a",   // TODO(robertm): use -l here?
   "--end-group",
   "crtend.o",
-  0,  // sentinel
+  NULL
 };
 
 
-void ProcessCommandline(const char** src,
+void ProcessCommandline(const char* const* src,
                         std::vector<std::string>* result) {
   for (int i = 0; src[i] != 0; ++i) {
     if (src[i][0] != '@') {
@@ -165,21 +189,37 @@ int HandleLinkRequest(int nexe_fd,
   std::vector<std::string> result_arg_vec;
 
   ProcessCommandline(kDefaultCommandCommon, &result_arg_vec);
+  switch (__builtin_nacl_target_arch()) {
+  case PnaclTargetArchitectureX86_32_NonSFI:
+  case PnaclTargetArchitectureARM_32_NonSFI:
+    ProcessCommandline(kDefaultCommandNonSFI, &result_arg_vec);
+    break;
+  case PnaclTargetArchitectureX86_32:
+  case PnaclTargetArchitectureX86_64:
+  case PnaclTargetArchitectureARM_32:
+  case PnaclTargetArchitectureMips_32:
+    ProcessCommandline(kDefaultCommandStatic, &result_arg_vec);
+    break;
+  default:
+    gold_fatal(_("no target architecture match"));
+    break;
+  }
+
   // Construct the rest of the command line, replacing FILENAME_OBJ with a list
   // of input files from the descriptors.
-  const int cmdline_len = ((sizeof(kDefaultCommandStatic) /
-                            sizeof(kDefaultCommandStatic[0])) +
+  const int cmdline_len = ((sizeof(kDefaultCommandFiles) /
+                            sizeof(kDefaultCommandFiles[0])) +
                            object_count - 1);
   const char *command_line[cmdline_len];
 
   int arg = 0;
-  for (int i = 0; kDefaultCommandStatic[i] != 0; i++) {
-    if (!strcmp(kDefaultCommandStatic[i], FILENAME_OBJ)) {
+  for (int i = 0; kDefaultCommandFiles[i] != 0; i++) {
+    if (!strcmp(kDefaultCommandFiles[i], FILENAME_OBJ)) {
       for (int k = 0; k < object_count; k++) {
         command_line[arg++] = filenames[k];
       }
     } else {
-      command_line[arg++] = kDefaultCommandStatic[i];
+      command_line[arg++] = kDefaultCommandFiles[i];
     }
   }
   command_line[arg] = 0;
