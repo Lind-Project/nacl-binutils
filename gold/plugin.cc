@@ -373,6 +373,11 @@ Plugin::claim_file(struct ld_plugin_input_file* plugin_input_file)
 inline void
 Plugin::all_symbols_read()
 {
+  // @LOCALMOD-BEGIN
+  if (parameters->errors()->error_count() > 0)
+    gold_exit(GOLD_ERR);
+  // @LOCALMOD-END
+
   if (this->all_symbols_read_handler_ != NULL)
     (*this->all_symbols_read_handler_)();
 }
