@@ -60,6 +60,8 @@ static int gmon_write_raw_arc
 
 int gmon_input = 0;
 int gmon_file_version = 0;	/* 0 == old (non-versioned) file format.  */
+extern histogram* histograms;
+extern unsigned num_histograms;
 
 static enum gmon_ptr_size
 gmon_get_ptr_size ()

@@ -51,6 +51,9 @@ static histogram *find_histogram_for_pc (bfd_vma pc);
 double hist_scale;
 static char hist_dimension[16] = "seconds";
 static char hist_dimension_abbrev = 's';
+histogram *histograms;
+unsigned num_histograms;
+
 
 static double accum_time;	/* Accumulated time so far for print_line(). */
 static double total_time;	/* Total time for all routines.  */
