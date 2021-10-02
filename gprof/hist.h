@@ -18,7 +18,6 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin Street - Fifth Floor, Boston,
    MA 02110-1301, USA.  */
-
 #ifndef hist_h
 #define hist_h
 
@@ -29,9 +28,6 @@ typedef struct histogram
   unsigned int num_bins;
   int *sample;           /* Histogram samples (shorts in the file!).  */
 } histogram;
-
-histogram *histograms;
-unsigned num_histograms;
 
 /* Scale factor converting samples to pc values:
    each sample covers HIST_SCALE bytes.  */
